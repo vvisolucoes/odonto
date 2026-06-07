@@ -377,6 +377,14 @@
   .fin-yellow { color: var(--warning); }
   .fin-blue { color: var(--teal); }
 
+  /* ─── MODAL ERROR BANNER ─── */
+  .modal-error {
+    background: #FEE2E2; color: #991B1B;
+    border: 1px solid #FCA5A5; border-radius: 8px;
+    padding: 10px 14px; font-size: 13px; font-weight: 500;
+    margin-bottom: 14px;
+  }
+
   /* ─── MODAL ─── */
   .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(13,33,55,0.6); backdrop-filter: blur(4px); z-index: 1000; align-items: center; justify-content: center; }
   .modal-overlay.open { display: flex; }
@@ -788,6 +796,7 @@
     <button class="modal-close" onclick="closeModal('modal-consulta')">✕</button>
     <div class="modal-title">Nova Consulta</div>
     <div class="modal-sub">Agende ou registre uma consulta</div>
+    <div id="c-error" class="modal-error" style="display:none"></div>
     <div class="field">
       <label>Paciente *</label>
       <input type="text" id="c-paciente-search" placeholder="Digitar nome do paciente..." oninput="searchPacienteConsulta()" autocomplete="off">
@@ -1231,6 +1240,7 @@ function openEditConsulta(id) {
   const procsList = document.getElementById('c-procs-list');
   procsList.innerHTML = '';
   (c.procs || []).forEach(pr => addProcRow(pr));
+  document.getElementById('c-error').style.display = 'none';
   document.getElementById('modal-consulta').classList.add('open');
 }
 
@@ -1244,6 +1254,7 @@ function clearConsultaModal() {
   document.getElementById('c-valor').value = '';
   document.getElementById('c-obs').value = '';
   document.getElementById('c-procs-list').innerHTML = '';
+  document.getElementById('c-error').style.display = 'none';
 }
 
 function updateProcArea() {
@@ -1281,11 +1292,18 @@ function selectPacienteConsulta(id, nome) {
   document.getElementById('c-paciente-dropdown').style.display = 'none';
 }
 
+function showModalError(msg) {
+  const el = document.getElementById('c-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
 function saveConsulta() {
   const pacId = parseInt(document.getElementById('c-paciente-id').value);
   const data = document.getElementById('c-data').value;
   const hora = document.getElementById('c-hora').value;
-  if (!pacId || !data || !hora) { alert('Preencha paciente, data e horário.'); return; }
+  document.getElementById('c-error').style.display = 'none';
+  if (!pacId || !data || !hora) { showModalError('Preencha paciente, data e horário.'); return; }
 
   const status = document.getElementById('c-status').value;
   const procs = [];
@@ -1302,6 +1320,10 @@ function saveConsulta() {
 
   const consultas = DB.get('consultas', []);
   const editId = document.getElementById('c-id').value;
+
+  // Conflito de horário: outro agendamento no mesmo dia/hora
+  const conflito = consultas.find(c => c.data === data && c.hora === hora && String(c.id) !== String(editId));
+  if (conflito) { showModalError('Já existe uma consulta agendada neste horário. Escolha outro horário.'); return; }
 
   let consulta;
   if (editId) {
