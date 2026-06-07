@@ -259,7 +259,7 @@
   .alert-dot-yellow { background: var(--warning); }
 
   /* ─── AGENDA ─── */
-  .agenda-nav { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .agenda-nav { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
   .agenda-date { font-size: 17px; font-weight: 700; color: var(--navy); }
   .time-slots { display: flex; flex-direction: column; gap: 2px; }
   .time-slot { display: flex; gap: 12px; align-items: flex-start; padding: 4px 0; }
@@ -273,6 +273,82 @@
   .slot-faltou { background: #F1F5F9; border-color: #CBD5E1; }
   .slot-name { font-size: 13px; font-weight: 600; color: var(--navy); }
   .slot-proc { font-size: 11px; color: var(--muted); }
+
+  /* ─── VIEW TOGGLE ─── */
+  .agenda-view-toggle { display: flex; gap: 3px; background: var(--bg); border-radius: 8px; padding: 3px; }
+  .view-btn { padding: 5px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer; border: none; background: none; font-family: inherit; transition: all 0.15s; }
+  .view-btn.active { background: white; color: var(--navy); box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+
+  /* ─── CALENDAR WEEK VIEW ─── */
+  .cal-week-view {
+    background: var(--card); border-radius: 14px; border: 1px solid var(--border);
+    overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    display: flex; flex-direction: column; max-height: calc(100vh - 210px);
+  }
+  .cal-week-view.hidden { display: none !important; }
+  .cal-week-header {
+    display: grid; grid-template-columns: 64px repeat(7, 1fr);
+    border-bottom: 2px solid var(--border); background: white; flex-shrink: 0;
+  }
+  .cal-week-body { overflow-y: auto; flex: 1; }
+  .cal-day-head {
+    text-align: center; padding: 10px 4px 12px;
+    font-size: 11px; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.5px;
+    border-left: 1px solid var(--border);
+  }
+  .cal-day-num {
+    font-size: 20px; font-weight: 700; color: var(--navy);
+    display: block; margin-top: 3px; line-height: 1;
+  }
+  .cal-day-head.today .cal-day-num {
+    background: var(--teal); color: white; border-radius: 50%;
+    width: 30px; height: 30px; display: flex; align-items: center;
+    justify-content: center; margin: 4px auto 0; font-size: 14px;
+  }
+  .cal-row {
+    display: grid; grid-template-columns: 64px repeat(7, 1fr);
+    border-bottom: 1px solid #F8FAFC; min-height: 40px;
+  }
+  .cal-row.cal-hour-row { border-top: 1px solid #E2E8F0; }
+  .cal-tlabel {
+    font-size: 10px; color: var(--muted); padding: 3px 8px 0 0;
+    text-align: right; font-weight: 500; line-height: 1.2; user-select: none;
+  }
+  .cal-cell {
+    border-left: 1px solid var(--border); padding: 2px 3px;
+    cursor: pointer; transition: background 0.1s; min-width: 0; position: relative;
+  }
+  .cal-cell:hover { background: #EFF6FF; }
+  .cal-cell.today-col { background: #F0F9FF; }
+  .cal-cell.today-col:hover { background: #E0F2FE; }
+  .cal-cell-add {
+    font-size: 11px; color: var(--border); opacity: 0;
+    transition: opacity 0.15s; display: block; text-align: center;
+    padding: 6px 0; pointer-events: none;
+  }
+  .cal-cell:hover .cal-cell-add { opacity: 1; color: var(--teal); }
+  .cal-appt {
+    border-radius: 5px; padding: 2px 6px; font-size: 11px; font-weight: 600;
+    margin-bottom: 1px; cursor: pointer; overflow: hidden;
+    white-space: nowrap; text-overflow: ellipsis; transition: opacity 0.15s;
+  }
+  .cal-appt:hover { opacity: 0.8; }
+  .cal-appt-agendada { background: #DBEAFE; color: #1E40AF; border-left: 3px solid #3B82F6; }
+  .cal-appt-realizada { background: #D1FAE5; color: #065F46; border-left: 3px solid #10B981; }
+  .cal-appt-cancelada { background: #FEE2E2; color: #991B1B; border-left: 3px solid #EF4444; }
+  .cal-appt-faltou { background: #F1F5F9; color: #475569; border-left: 3px solid #94A3B8; }
+
+  /* List view wrapper (desktop: hidden by default; shown when calView='day') */
+  .agenda-list-view { display: none; }
+  .agenda-list-view.show { display: block !important; }
+
+  /* Mobile overrides */
+  @media (max-width: 768px) {
+    .cal-week-view { display: none !important; }
+    .agenda-list-view { display: block !important; }
+    .agenda-view-toggle { display: none !important; }
+  }
 
   /* ─── ALERTS PAGE ─── */
   .alert-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
@@ -524,10 +600,22 @@
         <div class="agenda-date" id="agenda-date-label">Hoje</div>
         <button class="btn btn-ghost btn-icon" onclick="changeDay(1)">→</button>
         <button class="btn btn-ghost btn-sm" onclick="goToday()">Hoje</button>
+        <div class="agenda-view-toggle">
+          <button class="view-btn active" id="btn-view-week" onclick="setCalView('week')">Semana</button>
+          <button class="view-btn" id="btn-view-day" onclick="setCalView('day')">Dia</button>
+        </div>
         <button class="btn btn-teal" style="margin-left:auto" onclick="openModalAgendar()">+ Nova Consulta</button>
       </div>
-      <div class="card">
-        <div class="time-slots" id="time-slots-list"></div>
+      <!-- Desktop: visão de calendário semanal -->
+      <div class="cal-week-view" id="cal-week-view">
+        <div class="cal-week-header" id="cal-week-header"></div>
+        <div class="cal-week-body" id="cal-week-body"></div>
+      </div>
+      <!-- Mobile / visão em lista (Dia) -->
+      <div class="agenda-list-view" id="agenda-list-view">
+        <div class="card">
+          <div class="time-slots" id="time-slots-list"></div>
+        </div>
       </div>
     </div>
 
@@ -983,9 +1071,19 @@ function renderDashboard() {
 // AGENDA
 // ════════════════════════════════════════
 let agendaDate = new Date().toISOString().split('T')[0];
+let calView = 'week';
+
+function isDesktop() { return window.innerWidth >= 769; }
+
+function setCalView(v) {
+  calView = v;
+  document.getElementById('btn-view-week').classList.toggle('active', v === 'week');
+  document.getElementById('btn-view-day').classList.toggle('active', v === 'day');
+  renderAgenda();
+}
 
 function changeDay(n) {
-  agendaDate = addDays(agendaDate, n);
+  agendaDate = addDays(agendaDate, (calView === 'week' && isDesktop()) ? n * 7 : n);
   renderAgenda();
 }
 
@@ -994,18 +1092,49 @@ function goToday() {
   renderAgenda();
 }
 
+function getWeekDates(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  const dow = d.getDay();
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));
+  return Array.from({ length: 7 }, (_, i) => {
+    const dd = new Date(monday);
+    dd.setDate(monday.getDate() + i);
+    return dd.toISOString().split('T')[0];
+  });
+}
+
 function renderAgenda() {
   const today = new Date().toISOString().split('T')[0];
-  const label = agendaDate === today ? 'Hoje, ' : '';
-  document.getElementById('agenda-date-label').textContent = label + fmtDate(agendaDate) + ' (' + new Date(agendaDate + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long' }) + ')';
+  const desktop = isDesktop();
+  const showWeek = desktop && calView === 'week';
 
+  // Nav label
+  if (showWeek) {
+    const wDates = getWeekDates(agendaDate);
+    const toD = s => new Date(s + 'T12:00:00');
+    const fmt = s => `${String(toD(s).getDate()).padStart(2,'0')}/${String(toD(s).getMonth()+1).padStart(2,'0')}`;
+    document.getElementById('agenda-date-label').textContent =
+      `${fmt(wDates[0])} – ${fmt(wDates[6])} / ${toD(wDates[0]).getFullYear()}`;
+  } else {
+    const label = agendaDate === today ? 'Hoje, ' : '';
+    document.getElementById('agenda-date-label').textContent = label + fmtDate(agendaDate) +
+      ' (' + new Date(agendaDate + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long' }) + ')';
+  }
+
+  // Toggle views
+  document.getElementById('cal-week-view').classList.toggle('hidden', !showWeek);
+  document.getElementById('agenda-list-view').classList.toggle('show', !showWeek);
+
+  if (showWeek) renderWeekView(); else renderListView();
+}
+
+function renderListView() {
   const consultas = DB.get('consultas', []);
   const pacientes = DB.get('pacientes', []);
   const dayC = consultas.filter(c => c.data === agendaDate);
-
   const hours = [];
   for (let h = 7; h <= 20; h++) { hours.push(`${String(h).padStart(2,'0')}:00`); if (h < 20) hours.push(`${String(h).padStart(2,'0')}:30`); }
-
   const el = document.getElementById('time-slots-list');
   el.innerHTML = hours.map(time => {
     const c = dayC.find(c => c.hora === time);
@@ -1026,11 +1155,60 @@ function renderAgenda() {
   }).join('');
 }
 
+function renderWeekView() {
+  const consultas = DB.get('consultas', []);
+  const pacientes = DB.get('pacientes', []);
+  const today = new Date().toISOString().split('T')[0];
+  const wDates = getWeekDates(agendaDate);
+  const dayNames = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'DOM'];
+
+  // Header
+  document.getElementById('cal-week-header').innerHTML =
+    `<div></div>` +
+    wDates.map((date, i) => {
+      const d = new Date(date + 'T12:00:00');
+      const isToday = date === today;
+      return `<div class="cal-day-head${isToday ? ' today' : ''}">
+        ${dayNames[i]}<span class="cal-day-num">${d.getDate()}</span>
+      </div>`;
+    }).join('');
+
+  // Time slots
+  const hours = [];
+  for (let h = 7; h <= 20; h++) { hours.push(`${String(h).padStart(2,'0')}:00`); if (h < 20) hours.push(`${String(h).padStart(2,'0')}:30`); }
+
+  const body = document.getElementById('cal-week-body');
+  body.innerHTML = hours.map(time => {
+    const isHour = time.endsWith(':00');
+    return `<div class="cal-row${isHour ? ' cal-hour-row' : ''}">
+      <div class="cal-tlabel">${isHour ? time : ''}</div>
+      ${wDates.map(date => {
+        const c = consultas.find(c => c.data === date && c.hora === time);
+        const todayCls = date === today ? ' today-col' : '';
+        if (c) {
+          const p = pacientes.find(p => p.id === c.paciente_id);
+          const nome = (p?.nome || 'Paciente').split(' ')[0];
+          return `<div class="cal-cell${todayCls}" onclick="openModalAgendar('${time}','${date}')">
+            <div class="cal-appt cal-appt-${c.status}" onclick="openEditConsulta(${c.id});event.stopPropagation()" title="${p?.nome||''} · ${time}">${nome}</div>
+          </div>`;
+        }
+        return `<div class="cal-cell${todayCls}" onclick="openModalAgendar('${time}','${date}')">
+          <span class="cal-cell-add">+</span>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }).join('');
+
+  // Scroll to ~1h before current hour
+  const ch = new Date().getHours();
+  body.scrollTop = Math.max(0, (Math.min(ch, 19) - 8) * 2) * 40;
+}
+
 function statusLabel(s) { return { agendada:'Agendada', realizada:'Realizada', cancelada:'Cancelada', faltou:'Faltou' }[s] || s; }
 
-function openModalAgendar(hora) {
+function openModalAgendar(hora, date) {
   clearConsultaModal();
-  document.getElementById('c-data').value = agendaDate;
+  document.getElementById('c-data').value = date || agendaDate;
   if (hora) document.getElementById('c-hora').value = hora;
   updateProcArea();
   document.getElementById('modal-consulta').classList.add('open');
@@ -1559,6 +1737,11 @@ document.addEventListener('click', e => {
 
 // Enter to login
 document.addEventListener('keydown', e => { if (e.key === 'Enter' && document.getElementById('login-screen').style.display !== 'none') doLogin(); });
+
+// Re-render agenda on resize (mobile ↔ desktop transitions)
+window.addEventListener('resize', () => {
+  if (document.getElementById('page-agenda')?.classList.contains('active')) renderAgenda();
+});
 
 // ════════════════════════════════════════
 // BOOT
