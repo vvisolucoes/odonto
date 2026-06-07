@@ -272,7 +272,9 @@
   .slot-agendada { background: #DBEAFE; border-color: #93C5FD; }
   .slot-realizada { background: #D1FAE5; border-color: #6EE7B7; }
   .slot-cancelada { background: #FEE2E2; border-color: #FCA5A5; }
-  .slot-faltou { background: #F1F5F9; border-color: #CBD5E1; }
+  .slot-faltou, .slot-remarcado { background: #F1F5F9; border-color: #CBD5E1; }
+  .slot-retorno { background: #F3E8FF; border-color: #C084FC; }
+  .slot-finalizada { background: #DCFCE7; border-color: #4ADE80; }
   .slot-name { font-size: 13px; font-weight: 600; color: var(--navy); }
   .slot-proc { font-size: 11px; color: var(--muted); }
 
@@ -339,7 +341,9 @@
   .cal-appt-agendada { background: #DBEAFE; color: #1E40AF; border-left: 3px solid #3B82F6; }
   .cal-appt-realizada { background: #D1FAE5; color: #065F46; border-left: 3px solid #10B981; }
   .cal-appt-cancelada { background: #FEE2E2; color: #991B1B; border-left: 3px solid #EF4444; }
-  .cal-appt-faltou { background: #F1F5F9; color: #475569; border-left: 3px solid #94A3B8; }
+  .cal-appt-faltou, .cal-appt-remarcado { background: #F1F5F9; color: #475569; border-left: 3px solid #94A3B8; }
+  .cal-appt-retorno { background: #F3E8FF; color: #6B21A8; border-left: 3px solid #A855F7; }
+  .cal-appt-finalizada { background: #DCFCE7; color: #14532D; border-left: 3px solid #16A34A; }
 
   /* ─── BLOQUEIO DE HORÁRIO ─── */
   .slot-bloqueado { background: #F1F5F9 !important; border-color: #CBD5E1 !important; cursor: pointer; }
@@ -853,6 +857,10 @@
       <div id="c-paciente-dropdown" style="display:none;position:absolute;background:white;border:1.5px solid var(--border);border-radius:10px;max-height:200px;overflow-y:auto;z-index:10;width:calc(100% - 56px);box-shadow:0 8px 24px rgba(0,0,0,0.12)"></div>
       <input type="hidden" id="c-paciente-id">
     </div>
+    <div class="field">
+      <label>Doutor / Profissional</label>
+      <input type="text" id="c-profissional" placeholder="Ex: Dr. João Silva">
+    </div>
     <div class="field-row">
       <div class="field"><label>Data *</label><input type="date" id="c-data"></div>
       <div class="field"><label>Horário *</label><input type="time" id="c-hora" step="1800"></div>
@@ -862,8 +870,10 @@
         <select id="c-status">
           <option value="agendada">Agendada</option>
           <option value="realizada">Realizada</option>
+          <option value="finalizada">Finalizada</option>
+          <option value="retorno">Retorno</option>
           <option value="cancelada">Cancelada</option>
-          <option value="faltou">Faltou</option>
+          <option value="remarcado">Remarcado</option>
         </select>
       </div>
       <div class="field"><label>Valor (R$)</label><input type="number" id="c-valor" placeholder="0.00" min="0" step="0.01"></div>
@@ -1109,10 +1119,10 @@ function renderDashboard() {
 
   const todayC = consultas.filter(c => c.data === today);
   document.getElementById('stat-agendadas').textContent = todayC.filter(c => c.status === 'agendada').length;
-  document.getElementById('stat-realizadas').textContent = todayC.filter(c => c.status === 'realizada').length;
+  document.getElementById('stat-realizadas').textContent = todayC.filter(c => COMPLETED_STATUSES.includes(c.status)).length;
   const vencidos = alertas.filter(a => a.status === 'pendente' && a.data_prevista < today).length;
   document.getElementById('stat-retornos').textContent = vencidos;
-  const receita = todayC.filter(c => c.pago).reduce((s,c) => s + (Number(c.valor)||0), 0);
+  const receita = todayC.filter(c => COMPLETED_STATUSES.includes(c.status) && c.pago).reduce((s,c) => s + (Number(c.valor)||0), 0);
   document.getElementById('stat-receita').textContent = fmtMoney(receita);
 
   // Next consultas
@@ -1205,7 +1215,7 @@ function openStatDetail(type) {
         }</tbody></table>`;
 
   } else if (type === 'realizadas') {
-    const lista = todayC.filter(c => c.status === 'realizada').sort((a,b) => a.hora.localeCompare(b.hora));
+    const lista = todayC.filter(c => COMPLETED_STATUSES.includes(c.status)).sort((a,b) => a.hora.localeCompare(b.hora));
     title = 'Consultas Realizadas Hoje';
     sub = lista.length === 0 ? 'Nenhuma consulta realizada hoje' : `${lista.length} consulta${lista.length !== 1 ? 's' : ''} realizada${lista.length !== 1 ? 's' : ''}`;
     html = lista.length === 0
@@ -1245,7 +1255,7 @@ function openStatDetail(type) {
         }</tbody></table>`;
 
   } else if (type === 'receita') {
-    const lista = todayC.filter(c => c.status === 'realizada').sort((a,b) => a.hora.localeCompare(b.hora));
+    const lista = todayC.filter(c => COMPLETED_STATUSES.includes(c.status)).sort((a,b) => a.hora.localeCompare(b.hora));
     const total = lista.reduce((s,c) => s + (Number(c.valor)||0), 0);
     const pago = lista.filter(c => c.pago).reduce((s,c) => s + (Number(c.valor)||0), 0);
     const pendente = lista.filter(c => !c.pago).reduce((s,c) => s + (Number(c.valor)||0), 0);
@@ -1532,7 +1542,8 @@ function renderWeekView() {
   body.scrollTop = Math.max(0, (Math.min(ch, 19) - 8) * 2) * 40;
 }
 
-function statusLabel(s) { return { agendada:'Agendada', realizada:'Realizada', cancelada:'Cancelada', faltou:'Faltou' }[s] || s; }
+function statusLabel(s) { return { agendada:'Agendada', realizada:'Realizada', finalizada:'Finalizada', retorno:'Retorno', cancelada:'Cancelada', remarcado:'Remarcado', faltou:'Remarcado' }[s] || s; }
+const COMPLETED_STATUSES = ['realizada', 'finalizada', 'retorno'];
 
 function openModalAgendar(hora, date) {
   clearConsultaModal();
@@ -1549,6 +1560,7 @@ function openEditConsulta(id) {
   document.getElementById('c-id').value = c.id;
   document.getElementById('c-paciente-search').value = p?.nome || '';
   document.getElementById('c-paciente-id').value = c.paciente_id;
+  document.getElementById('c-profissional').value = c.profissional || '';
   document.getElementById('c-data').value = c.data;
   document.getElementById('c-hora').value = c.hora;
   document.getElementById('c-status').value = c.status;
@@ -1567,6 +1579,7 @@ function clearConsultaModal() {
   document.getElementById('c-id').value = '';
   document.getElementById('c-paciente-search').value = '';
   document.getElementById('c-paciente-id').value = '';
+  document.getElementById('c-profissional').value = '';
   document.getElementById('c-data').value = '';
   document.getElementById('c-hora').value = '';
   document.getElementById('c-status').value = 'agendada';
@@ -1578,7 +1591,7 @@ function clearConsultaModal() {
 
 function updateProcArea() {
   const status = document.getElementById('c-status').value;
-  document.getElementById('c-proc-area').style.display = status === 'realizada' ? 'block' : 'none';
+  document.getElementById('c-proc-area').style.display = COMPLETED_STATUSES.includes(status) ? 'block' : 'none';
 }
 
 document.addEventListener('change', e => { if (e.target.id === 'c-status') updateProcArea(); });
@@ -1625,6 +1638,7 @@ function saveConsulta() {
   if (!pacId || !data || !hora) { showModalError('Preencha paciente, data e horário.'); return; }
 
   const status = document.getElementById('c-status').value;
+  const profissional = document.getElementById('c-profissional').value.trim();
   const procs = [];
   document.querySelectorAll('#c-procs-list > div').forEach(row => {
     const sel = row.querySelector('select');
@@ -1651,18 +1665,18 @@ function saveConsulta() {
   let consulta;
   if (editId) {
     const idx = consultas.findIndex(c => c.id == editId);
-    consultas[idx] = { ...consultas[idx], paciente_id: pacId, data, hora, status, valor: parseFloat(document.getElementById('c-valor').value)||0, obs: document.getElementById('c-obs').value, procs };
+    consultas[idx] = { ...consultas[idx], paciente_id: pacId, data, hora, status, profissional, valor: parseFloat(document.getElementById('c-valor').value)||0, obs: document.getElementById('c-obs').value, procs };
     consulta = consultas[idx];
   } else {
     const id = DB.get('next_consulta_id', 100);
-    consulta = { id, paciente_id: pacId, data, hora, status, valor: parseFloat(document.getElementById('c-valor').value)||0, pago: false, obs: document.getElementById('c-obs').value, procs };
+    consulta = { id, paciente_id: pacId, data, hora, status, profissional, valor: parseFloat(document.getElementById('c-valor').value)||0, pago: false, obs: document.getElementById('c-obs').value, procs };
     consultas.push(consulta);
     DB.set('next_consulta_id', id + 1);
   }
   DB.set('consultas', consultas);
 
   // Create alertas for procs
-  if (status === 'realizada' && procs.length > 0) {
+  if (COMPLETED_STATUSES.includes(status) && procs.length > 0) {
     const alertas = DB.get('alertas', []);
     let nextAId = DB.get('next_alerta_id', 100);
     procs.forEach(pr => {
@@ -1948,7 +1962,7 @@ function renderFinanceiro() {
   const pacientes = DB.get('pacientes', []);
   const procs = DB.get('procedimentos', []);
 
-  let filtered = consultas.filter(c => c.status === 'realizada');
+  let filtered = consultas.filter(c => COMPLETED_STATUSES.includes(c.status));
   if (cutoff) filtered = filtered.filter(c => c.data >= cutoff);
   if (statusFiltro === 'pago') filtered = filtered.filter(c => c.pago);
   if (statusFiltro === 'pendente') filtered = filtered.filter(c => !c.pago);
