@@ -209,7 +209,8 @@
   .card-title { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
 
   .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
-  .stat-card { background: var(--card); border-radius: 14px; padding: 20px; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .stat-card { background: var(--card); border-radius: 14px; padding: 20px; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.05); cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; }
+  .stat-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); border-color: var(--teal); }
   .stat-icon { width: 42px; height: 42px; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 20px; margin-bottom: 12px; }
   .stat-value { font-size: 28px; font-weight: 700; color: var(--navy); line-height: 1; }
   .stat-label { font-size: 12px; color: var(--muted); margin-top: 4px; font-weight: 500; }
@@ -568,22 +569,22 @@
         <div class="page-sub" id="dash-date">Carregando...</div>
       </div>
       <div class="stats-grid">
-        <div class="stat-card">
+        <div class="stat-card" onclick="openStatDetail('agendadas')" title="Ver detalhes das consultas agendadas">
           <div class="stat-icon" style="background:#DBEAFE">📅</div>
           <div class="stat-value" id="stat-agendadas">0</div>
           <div class="stat-label">Consultas agendadas hoje</div>
         </div>
-        <div class="stat-card">
+        <div class="stat-card" onclick="openStatDetail('realizadas')" title="Ver detalhes das consultas realizadas">
           <div class="stat-icon" style="background:#D1FAE5">✅</div>
           <div class="stat-value" id="stat-realizadas">0</div>
           <div class="stat-label">Realizadas hoje</div>
         </div>
-        <div class="stat-card">
+        <div class="stat-card" onclick="openStatDetail('retornos')" title="Ver retornos vencidos">
           <div class="stat-icon" style="background:#FEE2E2">🔔</div>
           <div class="stat-value" id="stat-retornos">0</div>
           <div class="stat-label">Retornos vencidos</div>
         </div>
-        <div class="stat-card">
+        <div class="stat-card" onclick="openStatDetail('receita')" title="Ver breakdown da receita">
           <div class="stat-icon" style="background:#FEF3C7">💰</div>
           <div class="stat-value" id="stat-receita">R$ 0</div>
           <div class="stat-label">Receita do dia</div>
@@ -884,6 +885,16 @@
   </div>
 </div>
 
+<!-- MODAL DETALHE CARD STAT -->
+<div class="modal-overlay" id="modal-stat-detail">
+  <div class="modal" style="position:relative;width:620px;max-width:95vw">
+    <button class="modal-close" onclick="closeModal('modal-stat-detail')">✕</button>
+    <div class="modal-title" id="stat-detail-title">Detalhes</div>
+    <div class="modal-sub" id="stat-detail-sub"></div>
+    <div id="stat-detail-content"></div>
+  </div>
+</div>
+
 <!-- MODAL ALERTA AÇÃO -->
 <div class="modal-overlay" id="modal-alerta-acao">
   <div class="modal" style="position:relative">
@@ -1126,6 +1137,112 @@ function renderDashboard() {
         const ultima = ults[0]?.data;
         return `<div class="bday-item"><span>👤</span><span class="bday-name">${p.nome}</span><span class="bday-date">${ultima ? fmtDate(ultima) : 'Nunca'}</span></div>`;
       }).join('');
+}
+
+// ════════════════════════════════════════
+// STAT CARD DETAIL MODAL
+// ════════════════════════════════════════
+function openStatDetail(type) {
+  const today = new Date().toISOString().split('T')[0];
+  const consultas = DB.get('consultas', []);
+  const alertas = DB.get('alertas', []);
+  const pacientes = DB.get('pacientes', []);
+  const procs = DB.get('procedimentos', []);
+  const todayC = consultas.filter(c => c.data === today);
+
+  let title, sub, html;
+
+  if (type === 'agendadas') {
+    const lista = todayC.filter(c => c.status === 'agendada').sort((a,b) => a.hora.localeCompare(b.hora));
+    title = 'Consultas Agendadas Hoje';
+    sub = lista.length === 0 ? 'Nenhuma consulta agendada para hoje' : `${lista.length} consulta${lista.length !== 1 ? 's' : ''} agendada${lista.length !== 1 ? 's' : ''}`;
+    html = lista.length === 0
+      ? '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-text">Nenhuma consulta agendada hoje</div></div>'
+      : `<table><thead><tr><th>Horário</th><th>Paciente</th><th>Telefone</th><th>Status</th></tr></thead><tbody>${
+          lista.map(c => {
+            const p = pacientes.find(p => p.id === c.paciente_id);
+            return `<tr>
+              <td style="font-weight:600">${c.hora}</td>
+              <td><span style="cursor:pointer;color:var(--teal);font-weight:600" onclick="closeModal('modal-stat-detail');viewPerfil(${p?.id})">${p?.nome||'?'}</span></td>
+              <td style="color:var(--muted)">${p?.tel||'–'}</td>
+              <td><span class="badge badge-blue">Agendada</span></td>
+            </tr>`;
+          }).join('')
+        }</tbody></table>`;
+
+  } else if (type === 'realizadas') {
+    const lista = todayC.filter(c => c.status === 'realizada').sort((a,b) => a.hora.localeCompare(b.hora));
+    title = 'Consultas Realizadas Hoje';
+    sub = lista.length === 0 ? 'Nenhuma consulta realizada hoje' : `${lista.length} consulta${lista.length !== 1 ? 's' : ''} realizada${lista.length !== 1 ? 's' : ''}`;
+    html = lista.length === 0
+      ? '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">Nenhuma consulta realizada hoje</div></div>'
+      : `<table><thead><tr><th>Horário</th><th>Paciente</th><th>Procedimentos</th><th>Valor</th></tr></thead><tbody>${
+          lista.map(c => {
+            const p = pacientes.find(p => p.id === c.paciente_id);
+            const procNomes = (c.procs||[]).map(pr => procs.find(p=>p.id===pr.proc_id)?.nome||'').filter(Boolean).join(', ') || '–';
+            return `<tr>
+              <td style="font-weight:600">${c.hora}</td>
+              <td><span style="cursor:pointer;color:var(--teal);font-weight:600" onclick="closeModal('modal-stat-detail');viewPerfil(${p?.id})">${p?.nome||'?'}</span></td>
+              <td style="font-size:12px;color:var(--muted)">${procNomes}</td>
+              <td style="font-weight:700">${fmtMoney(c.valor)}</td>
+            </tr>`;
+          }).join('')
+        }</tbody></table>`;
+
+  } else if (type === 'retornos') {
+    const lista = alertas.filter(a => a.status === 'pendente' && a.data_prevista < today)
+      .sort((a,b) => a.data_prevista.localeCompare(b.data_prevista));
+    title = 'Retornos Vencidos';
+    sub = lista.length === 0 ? 'Nenhum retorno vencido' : `${lista.length} retorno${lista.length !== 1 ? 's' : ''} em atraso`;
+    html = lista.length === 0
+      ? '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">Nenhum retorno vencido</div></div>'
+      : `<table><thead><tr><th>Paciente</th><th>Procedimento</th><th>Atraso</th><th></th></tr></thead><tbody>${
+          lista.map(a => {
+            const p = pacientes.find(p => p.id === a.paciente_id);
+            const pr = procs.find(pr => pr.id === a.proc_id);
+            const dias = Math.floor((new Date(today) - new Date(a.data_prevista)) / 86400000);
+            return `<tr>
+              <td><span style="cursor:pointer;color:var(--teal);font-weight:600" onclick="closeModal('modal-stat-detail');viewPerfil(${p?.id})">${p?.nome||'?'}</span><div style="font-size:11px;color:var(--muted)">${p?.tel||''}</div></td>
+              <td>${pr?.nome||'?'}</td>
+              <td><span class="badge badge-red">${dias}d atraso</span></td>
+              <td><button class="btn btn-teal btn-sm" onclick="closeModal('modal-stat-detail');openAgendarPaciente(${a.paciente_id})">Agendar</button></td>
+            </tr>`;
+          }).join('')
+        }</tbody></table>`;
+
+  } else if (type === 'receita') {
+    const lista = todayC.filter(c => c.status === 'realizada').sort((a,b) => a.hora.localeCompare(b.hora));
+    const total = lista.reduce((s,c) => s + (Number(c.valor)||0), 0);
+    const pago = lista.filter(c => c.pago).reduce((s,c) => s + (Number(c.valor)||0), 0);
+    const pendente = lista.filter(c => !c.pago).reduce((s,c) => s + (Number(c.valor)||0), 0);
+    title = 'Receita do Dia';
+    sub = `Total: ${fmtMoney(total)} · Recebido: ${fmtMoney(pago)} · Pendente: ${fmtMoney(pendente)}`;
+    html = lista.length === 0
+      ? '<div class="empty-state"><div class="empty-icon">💰</div><div class="empty-text">Nenhuma receita registrada hoje</div></div>'
+      : `<table><thead><tr><th>Horário</th><th>Paciente</th><th>Procedimentos</th><th>Valor</th><th>Status</th></tr></thead><tbody>${
+          lista.map(c => {
+            const p = pacientes.find(p => p.id === c.paciente_id);
+            const procNomes = (c.procs||[]).map(pr => procs.find(p=>p.id===pr.proc_id)?.nome||'').filter(Boolean).join(', ') || '–';
+            return `<tr>
+              <td style="font-weight:600">${c.hora}</td>
+              <td style="font-weight:600">${p?.nome||'?'}</td>
+              <td style="font-size:12px;color:var(--muted)">${procNomes}</td>
+              <td style="font-weight:700">${fmtMoney(c.valor)}</td>
+              <td>${c.pago ? '<span class="badge badge-green">✓ Pago</span>' : '<span class="badge badge-yellow">Pendente</span>'}</td>
+            </tr>`;
+          }).join('')
+        }</tbody></table>
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);display:flex;gap:20px;justify-content:flex-end">
+          <div style="text-align:right"><div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Recebido</div><div style="font-size:18px;font-weight:700;color:var(--success)">${fmtMoney(pago)}</div></div>
+          <div style="text-align:right"><div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Pendente</div><div style="font-size:18px;font-weight:700;color:var(--warning)">${fmtMoney(pendente)}</div></div>
+          <div style="text-align:right"><div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Total</div><div style="font-size:18px;font-weight:700;color:var(--navy)">${fmtMoney(total)}</div></div>
+        </div>`;
+  }
+
+  document.getElementById('stat-detail-title').textContent = title;
+  document.getElementById('stat-detail-sub').textContent = sub;
+  document.getElementById('stat-detail-content').innerHTML = html;
+  document.getElementById('modal-stat-detail').classList.add('open');
 }
 
 // ════════════════════════════════════════
