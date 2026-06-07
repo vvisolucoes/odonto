@@ -339,6 +339,20 @@
   .cal-appt-cancelada { background: #FEE2E2; color: #991B1B; border-left: 3px solid #EF4444; }
   .cal-appt-faltou { background: #F1F5F9; color: #475569; border-left: 3px solid #94A3B8; }
 
+  /* ─── BLOQUEIO DE HORÁRIO ─── */
+  .slot-bloqueado { background: #F1F5F9 !important; border-color: #CBD5E1 !important; cursor: pointer; }
+  .slot-bloqueado:hover { background: #E2E8F0 !important; border-color: #94A3B8 !important; }
+  .slot-bloqueado .slot-name { color: var(--muted); font-weight: 600; }
+  .slot-bloquear { font-size: 10px; color: var(--border); opacity: 0; transition: opacity 0.15s; }
+  .time-slot:hover .slot-bloquear { opacity: 1; color: var(--muted); }
+  .cal-cell-blocked { background: #F1F5F9 !important; cursor: pointer; }
+  .cal-cell-blocked:hover { background: #E2E8F0 !important; }
+  .cal-block-tag {
+    font-size: 10px; color: #64748B; font-weight: 600;
+    display: block; padding: 3px 4px; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+
   /* List view wrapper (desktop: hidden by default; shown when calView='day') */
   .agenda-list-view { display: none; }
   .agenda-list-view.show { display: block !important; }
@@ -612,7 +626,8 @@
           <button class="view-btn active" id="btn-view-week" onclick="setCalView('week')">Semana</button>
           <button class="view-btn" id="btn-view-day" onclick="setCalView('day')">Dia</button>
         </div>
-        <button class="btn btn-teal" style="margin-left:auto" onclick="openModalAgendar()">+ Nova Consulta</button>
+        <button class="btn btn-ghost btn-sm" onclick="openModalBloqueio()" style="margin-left:auto;color:var(--muted)">🔒 Bloquear</button>
+        <button class="btn btn-teal" onclick="openModalAgendar()">+ Nova Consulta</button>
       </div>
       <!-- Desktop: visão de calendário semanal -->
       <div class="cal-week-view" id="cal-week-view">
@@ -828,6 +843,43 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modal-consulta')">Cancelar</button>
       <button class="btn btn-teal" onclick="saveConsulta()">Salvar Consulta</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL BLOQUEIO -->
+<div class="modal-overlay" id="modal-bloqueio">
+  <div class="modal" style="position:relative">
+    <button class="modal-close" onclick="closeModal('modal-bloqueio')">✕</button>
+    <div class="modal-title" id="b-modal-title">Bloquear Horário</div>
+    <div class="modal-sub">Marcar período como indisponível</div>
+    <div id="b-error" class="modal-error" style="display:none"></div>
+    <div class="field-row">
+      <div class="field"><label>Data início *</label><input type="date" id="b-data-ini"></div>
+      <div class="field"><label>Data fim</label><input type="date" id="b-data-fim"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Hora início <span style="font-weight:400;color:var(--muted)">(deixe vazio para dia todo)</span></label><input type="time" id="b-hora-ini" step="1800"></div>
+      <div class="field"><label>Hora fim</label><input type="time" id="b-hora-fim" step="1800"></div>
+    </div>
+    <div class="field">
+      <label>Motivo *</label>
+      <select id="b-motivo" onchange="updateBloqueioObs()">
+        <option value="almoco">Almoço</option>
+        <option value="curso">Curso / Capacitação</option>
+        <option value="ferias">Férias / Folga</option>
+        <option value="outro">Outro</option>
+      </select>
+    </div>
+    <div class="field" id="b-obs-wrap" style="display:none">
+      <label>Descrição *</label>
+      <input type="text" id="b-obs" placeholder="Ex: Congresso, reunião...">
+    </div>
+    <input type="hidden" id="b-id">
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-bloqueio')">Cancelar</button>
+      <button class="btn btn-danger-ghost" id="b-btn-remover" style="display:none" onclick="confirmRemoveBloqueio()">Remover Bloqueio</button>
+      <button class="btn btn-primary" id="b-btn-salvar" onclick="saveBloqueio()">Bloquear Período</button>
     </div>
   </div>
 </div>
@@ -1077,6 +1129,102 @@ function renderDashboard() {
 }
 
 // ════════════════════════════════════════
+// BLOQUEIOS DE HORÁRIO
+// ════════════════════════════════════════
+function motivoBloqueioLabel(b) {
+  const map = { almoco: 'Almoço', curso: 'Curso', ferias: 'Férias', outro: b.obs || 'Bloqueado' };
+  return map[b.motivo] || 'Bloqueado';
+}
+
+function getBloqueio(bloqueios, date, time) {
+  return bloqueios.find(b => {
+    if (date < b.data_inicio || date > b.data_fim) return false;
+    if (!b.hora_inicio) return true;
+    return time >= b.hora_inicio && time < b.hora_fim;
+  }) || null;
+}
+
+function updateBloqueioObs() {
+  const m = document.getElementById('b-motivo').value;
+  document.getElementById('b-obs-wrap').style.display = m === 'outro' ? 'block' : 'none';
+}
+
+function openModalBloqueio(date, time) {
+  document.getElementById('b-id').value = '';
+  document.getElementById('b-data-ini').value = date || agendaDate;
+  document.getElementById('b-data-fim').value = date || agendaDate;
+  document.getElementById('b-hora-ini').value = time || '';
+  document.getElementById('b-hora-fim').value = '';
+  document.getElementById('b-motivo').value = 'almoco';
+  document.getElementById('b-obs').value = '';
+  document.getElementById('b-obs-wrap').style.display = 'none';
+  document.getElementById('b-error').style.display = 'none';
+  document.getElementById('b-modal-title').textContent = 'Bloquear Horário';
+  document.getElementById('b-btn-remover').style.display = 'none';
+  document.getElementById('b-btn-salvar').style.display = '';
+  document.getElementById('modal-bloqueio').classList.add('open');
+}
+
+function openBloqueioDetail(id) {
+  const b = DB.get('bloqueios', []).find(b => b.id === id);
+  if (!b) return;
+  document.getElementById('b-id').value = b.id;
+  document.getElementById('b-data-ini').value = b.data_inicio;
+  document.getElementById('b-data-fim').value = b.data_fim;
+  document.getElementById('b-hora-ini').value = b.hora_inicio || '';
+  document.getElementById('b-hora-fim').value = b.hora_fim || '';
+  document.getElementById('b-motivo').value = b.motivo;
+  document.getElementById('b-obs').value = b.obs || '';
+  document.getElementById('b-obs-wrap').style.display = b.motivo === 'outro' ? 'block' : 'none';
+  document.getElementById('b-error').style.display = 'none';
+  document.getElementById('b-modal-title').textContent = 'Bloqueio: ' + motivoBloqueioLabel(b);
+  document.getElementById('b-btn-remover').style.display = '';
+  document.getElementById('b-btn-salvar').style.display = 'none';
+  document.getElementById('modal-bloqueio').classList.add('open');
+}
+
+function confirmRemoveBloqueio() {
+  removeBloqueio(parseInt(document.getElementById('b-id').value));
+}
+
+function removeBloqueio(id) {
+  DB.set('bloqueios', DB.get('bloqueios', []).filter(b => b.id !== id));
+  closeModal('modal-bloqueio');
+  renderAgenda();
+}
+
+function showBloqueioError(msg) {
+  const el = document.getElementById('b-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function saveBloqueio() {
+  const dataIni = document.getElementById('b-data-ini').value;
+  const dataFim = document.getElementById('b-data-fim').value || dataIni;
+  const horaIni = document.getElementById('b-hora-ini').value;
+  const horaFim = document.getElementById('b-hora-fim').value;
+  const motivo = document.getElementById('b-motivo').value;
+  const obs = document.getElementById('b-obs').value.trim();
+  document.getElementById('b-error').style.display = 'none';
+
+  if (!dataIni) { showBloqueioError('Informe a data de início.'); return; }
+  if (dataFim < dataIni) { showBloqueioError('Data fim deve ser igual ou posterior à data início.'); return; }
+  if (horaIni && !horaFim) { showBloqueioError('Informe também a hora de término.'); return; }
+  if (horaFim && !horaIni) { showBloqueioError('Informe também a hora de início.'); return; }
+  if (horaIni && horaFim && horaFim <= horaIni) { showBloqueioError('Hora fim deve ser posterior à hora início.'); return; }
+  if (motivo === 'outro' && !obs) { showBloqueioError('Descreva o motivo do bloqueio.'); return; }
+
+  const bloqueios = DB.get('bloqueios', []);
+  const id = DB.get('next_bloqueio_id', 200);
+  bloqueios.push({ id, data_inicio: dataIni, data_fim: dataFim, hora_inicio: horaIni, hora_fim: horaFim, motivo, obs });
+  DB.set('bloqueios', bloqueios);
+  DB.set('next_bloqueio_id', id + 1);
+  closeModal('modal-bloqueio');
+  renderAgenda();
+}
+
+// ════════════════════════════════════════
 // AGENDA
 // ════════════════════════════════════════
 let agendaDate = new Date().toISOString().split('T')[0];
@@ -1141,6 +1289,7 @@ function renderAgenda() {
 function renderListView() {
   const consultas = DB.get('consultas', []);
   const pacientes = DB.get('pacientes', []);
+  const bloqueios = DB.get('bloqueios', []);
   const dayC = consultas.filter(c => c.data === agendaDate);
   const hours = [];
   for (let h = 7; h <= 20; h++) { hours.push(`${String(h).padStart(2,'0')}:00`); if (h < 20) hours.push(`${String(h).padStart(2,'0')}:30`); }
@@ -1157,6 +1306,18 @@ function renderListView() {
         </div>
       </div>`;
     }
+    const b = getBloqueio(bloqueios, agendaDate, time);
+    if (b) {
+      return `<div class="time-slot">
+        <div class="time-label">${time}</div>
+        <div class="slot-area slot-bloqueado" onclick="openBloqueioDetail(${b.id})">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div class="slot-name">🔒 ${motivoBloqueioLabel(b)}</div>
+            <span style="font-size:10px;color:var(--muted)">Clique para remover</span>
+          </div>
+        </div>
+      </div>`;
+    }
     return `<div class="time-slot">
       <div class="time-label">${time}</div>
       <div class="slot-area slot-empty" onclick="openModalAgendar('${time}')"><span style="font-size:11px;color:var(--muted)">+ Agendar</span></div>
@@ -1167,6 +1328,7 @@ function renderListView() {
 function renderWeekView() {
   const consultas = DB.get('consultas', []);
   const pacientes = DB.get('pacientes', []);
+  const bloqueios = DB.get('bloqueios', []);
   const today = new Date().toISOString().split('T')[0];
   const wDates = getWeekDates(agendaDate);
   const dayNames = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'DOM'];
@@ -1199,6 +1361,12 @@ function renderWeekView() {
           const nome = (p?.nome || 'Paciente').split(' ')[0];
           return `<div class="cal-cell${todayCls}" onclick="openModalAgendar('${time}','${date}')">
             <div class="cal-appt cal-appt-${c.status}" onclick="openEditConsulta(${c.id});event.stopPropagation()" title="${p?.nome||''} · ${time}">${nome}</div>
+          </div>`;
+        }
+        const b = getBloqueio(bloqueios, date, time);
+        if (b) {
+          return `<div class="cal-cell${todayCls} cal-cell-blocked" onclick="openBloqueioDetail(${b.id})" title="Bloqueado: ${motivoBloqueioLabel(b)}">
+            <span class="cal-block-tag">🔒 ${motivoBloqueioLabel(b)}</span>
           </div>`;
         }
         return `<div class="cal-cell${todayCls}" onclick="openModalAgendar('${time}','${date}')">
@@ -1320,6 +1488,10 @@ function saveConsulta() {
 
   const consultas = DB.get('consultas', []);
   const editId = document.getElementById('c-id').value;
+
+  // Verificar bloqueio de horário
+  const bloqueio = getBloqueio(DB.get('bloqueios', []), data, hora);
+  if (bloqueio) { showModalError(`Horário bloqueado (${motivoBloqueioLabel(bloqueio)}). Remova o bloqueio antes de agendar.`); return; }
 
   // Conflito de horário: outro agendamento no mesmo dia/hora
   const conflito = consultas.find(c => c.data === data && c.hora === hora && String(c.id) !== String(editId));
