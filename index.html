@@ -242,6 +242,7 @@
   .btn-teal:hover { background: var(--teal-light); }
   .btn-ghost { background: none; border: 1.5px solid var(--border); color: var(--text); }
   .btn-ghost:hover { background: var(--bg); }
+  .btn-ghost.active { background: var(--teal); border-color: var(--teal); color: #fff; }
   .btn-danger-ghost { background: none; border: 1.5px solid #FCA5A5; color: var(--danger); }
   .btn-sm { padding: 6px 12px; font-size: 12px; }
   .btn-icon { padding: 7px 9px; }
@@ -638,15 +639,9 @@
           <div id="dash-alertas-list"></div>
         </div>
       </div>
-      <div class="grid-2">
-        <div class="card">
-          <div class="card-title">Aniversariantes do Mês 🎂</div>
-          <div id="dash-bday-list"><div class="empty-state"><div class="empty-icon">🎂</div><div class="empty-text">Nenhum aniversariante</div></div></div>
-        </div>
-        <div class="card">
-          <div class="card-title">Pacientes Inativos (+1 ano)</div>
-          <div id="dash-inativos-list"><div class="empty-state"><div class="empty-icon">😴</div><div class="empty-text">Nenhum inativo</div></div></div>
-        </div>
+      <div class="card">
+        <div class="card-title">Aniversariantes do Dia 🎂</div>
+        <div id="dash-bday-list"><div class="empty-state"><div class="empty-icon">🎂</div><div class="empty-text">Nenhum aniversariante hoje</div></div></div>
       </div>
     </div>
 
@@ -689,6 +684,7 @@
       </div>
       <div class="top-bar">
         <div class="search-bar"><input type="text" id="search-pacientes" placeholder="Buscar por nome, CPF ou telefone..." oninput="renderPacientes()"></div>
+        <button class="btn btn-ghost" id="btn-filtro-inativos" onclick="toggleFiltroInativos()">😴 Inativos</button>
         <button class="btn btn-teal" onclick="openModalPaciente()">+ Novo Paciente</button>
       </div>
       <div class="card">
@@ -1159,29 +1155,21 @@ function renderDashboard() {
     }).join('');
   }
 
-  // Aniversariantes
-  const mesAtual = new Date().getMonth() + 1;
-  const bdayers = pacientes.filter(p => p.nasc && parseInt(p.nasc.split('-')[1]) === mesAtual);
+  // Aniversariantes do dia
+  const todayDate = new Date();
+  const diaAtual = todayDate.getDate();
+  const mesAtual = todayDate.getMonth() + 1;
+  const bdayers = pacientes.filter(p => {
+    if (!p.nasc) return false;
+    const parts = p.nasc.split('-');
+    return parseInt(parts[1]) === mesAtual && parseInt(parts[2]) === diaAtual;
+  });
   const elB = document.getElementById('dash-bday-list');
   elB.innerHTML = bdayers.length === 0
-    ? '<div class="empty-state"><div class="empty-icon">🎂</div><div class="empty-text">Nenhum aniversariante este mês</div></div>'
-    : bdayers.map(p => `<div class="bday-item"><span class="bday-cake">🎂</span><span class="bday-name">${p.nome}</span><span class="bday-date">${p.nasc.slice(8,10)}/${String(mesAtual).padStart(2,'0')}</span></div>`).join('');
-
-  // Inativos
-  const umAnoAtras = addDays(today, -365);
-  const inativos = pacientes.filter(p => {
-    const ults = consultas.filter(c => c.paciente_id === p.id).sort((a,b) => b.data.localeCompare(a.data));
-    return ults.length === 0 || ults[0].data < umAnoAtras;
-  }).slice(0, 5);
-  const elI = document.getElementById('dash-inativos-list');
-  elI.innerHTML = inativos.length === 0
-    ? '<div class="empty-state"><div class="empty-icon">😴</div><div class="empty-text">Nenhum inativo</div></div>'
-    : inativos.map(p => {
-        const ults = consultas.filter(c => c.paciente_id === p.id).sort((a,b) => b.data.localeCompare(a.data));
-        const ultima = ults[0]?.data;
-        return `<div class="bday-item"><span>👤</span><span class="bday-name">${p.nome}</span><span class="bday-date">${ultima ? fmtDate(ultima) : 'Nunca'}</span></div>`;
-      }).join('');
+    ? '<div class="empty-state"><div class="empty-icon">🎂</div><div class="empty-text">Nenhum aniversariante hoje</div></div>'
+    : bdayers.map(p => `<div class="bday-item"><span class="bday-cake">🎂</span><span class="bday-name">${p.nome}</span><span class="bday-date">${String(diaAtual).padStart(2,'0')}/${String(mesAtual).padStart(2,'0')}</span></div>`).join('');
 }
+
 
 // ════════════════════════════════════════
 // STAT CARD DETAIL MODAL
@@ -1696,25 +1684,61 @@ function saveConsulta() {
 // ════════════════════════════════════════
 // PACIENTES
 // ════════════════════════════════════════
+function toggleFiltroInativos() {
+  const btn = document.getElementById('btn-filtro-inativos');
+  btn.classList.toggle('active');
+  renderPacientes();
+}
+
 function renderPacientes() {
   const q = (document.getElementById('search-pacientes')?.value||'').toLowerCase();
+  const soInativos = document.getElementById('btn-filtro-inativos')?.classList.contains('active');
   const pacientes = DB.get('pacientes', []);
   const alertas = DB.get('alertas', []);
   const consultas = DB.get('consultas', []);
   const today = new Date().toISOString().split('T')[0];
+  const umAnoAtras = addDays(today, -365);
 
-  const filtered = pacientes.filter(p =>
+  let filtered = pacientes.filter(p =>
     p.nome.toLowerCase().includes(q) || (p.cpf||'').includes(q) || (p.tel||'').includes(q)
   );
 
+  if (soInativos) {
+    filtered = filtered.filter(p => {
+      const ultC = consultas.filter(c => c.paciente_id === p.id).sort((a,b) => b.data.localeCompare(a.data))[0];
+      return !ultC || ultC.data < umAnoAtras;
+    });
+  }
+
+  const thead = document.querySelector('#page-pacientes table thead tr');
+  if (soInativos) {
+    thead.innerHTML = '<th>Nome</th><th>Telefone</th><th>Última Consulta</th><th>Tempo Inativo</th><th></th>';
+  } else {
+    thead.innerHTML = '<th>Nome</th><th>Telefone</th><th>Última Consulta</th><th>Próx. Retorno</th><th>Status</th><th></th>';
+  }
+
   const tbody = document.getElementById('pacientes-tbody');
   if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">👥</div><div class="empty-text">Nenhum paciente encontrado</div></div></td></tr>`;
+    const cols = soInativos ? 5 : 6;
+    tbody.innerHTML = `<tr><td colspan="${cols}"><div class="empty-state"><div class="empty-icon">👥</div><div class="empty-text">${soInativos ? 'Nenhum paciente inativo' : 'Nenhum paciente encontrado'}</div></div></td></tr>`;
     return;
   }
 
   tbody.innerHTML = filtered.map(p => {
     const ultC = consultas.filter(c => c.paciente_id === p.id).sort((a,b) => b.data.localeCompare(a.data))[0];
+
+    if (soInativos) {
+      const diasInativos = ultC ? Math.floor((new Date(today) - new Date(ultC.data)) / 86400000) : null;
+      const tempoLabel = diasInativos !== null ? `${Math.floor(diasInativos / 30)} meses` : 'Nunca consultou';
+      return `<tr>
+        <td><span onclick="viewPerfil(${p.id})" style="cursor:pointer;color:var(--teal);font-weight:600">${p.nome}</span></td>
+        <td>${p.tel||'–'}</td>
+        <td>${ultC ? fmtDate(ultC.data) : '–'}</td>
+        <td><span class="badge badge-red">${tempoLabel}</span></td>
+        <td><button class="btn btn-ghost btn-sm" onclick="openEditPaciente(${p.id})">Editar</button></td>
+      </tr>`;
+    }
+
     const pAlertas = alertas.filter(a => a.paciente_id === p.id && a.status === 'pendente');
     const vencido = pAlertas.some(a => a.data_prevista < today);
     const proximo = pAlertas.some(a => a.data_prevista >= today && a.data_prevista <= addDays(today, 30));
