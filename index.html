@@ -4,6 +4,47 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OdontoGestão — Sistema de Gestão Digital</title>
+
+<!-- ═══════════════════════════════════════════════════
+     FIREBASE SDKs
+     Cole as credenciais do seu projeto abaixo.
+     Para obter: Firebase Console → Configurações do projeto → Seus apps → SDK
+═══════════════════════════════════════════════════ -->
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged }
+    from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+  import { getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, Timestamp }
+    from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+  import { getStorage, ref, uploadString, getDownloadURL, deleteObject }
+    from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js';
+
+  // ─── COLE SUAS CREDENCIAIS AQUI ───────────────────
+  const firebaseConfig = {
+    apiKey:            "AIzaSyB2lmG42F-nQz4U4l7p0Gnuy8k9vUhha2g",
+    authDomain:        "odonto-vvisolucoes.firebaseapp.com",
+    projectId:         "odonto-vvisolucoes",
+    storageBucket:     "odonto-vvisolucoes.firebasestorage.app",
+    messagingSenderId: "671881233532",
+    appId:             "1:671881233532:web:6292ab3e308d427aaab5f9",
+  };
+  // ──────────────────────────────────────────────────
+
+  const app     = initializeApp(firebaseConfig);
+  const auth    = getAuth(app);
+  const db      = getFirestore(app);
+  const storage = getStorage(app);
+
+  // Expõe globalmente para as funções do sistema usarem
+  window._FB = { auth, db, storage,
+    signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged,
+    collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, Timestamp,
+    ref, uploadString, getDownloadURL, deleteObject,
+  };
+  window._FB_READY = true;
+  document.dispatchEvent(new Event('fb-ready'));
+</script>
+
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap');
 
@@ -463,6 +504,67 @@
   .history-date { font-size: 12px; color: var(--muted); font-weight: 500; }
   .history-proc { font-size: 13px; font-weight: 600; color: var(--text); }
   .history-obs { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .history-item-clickable { cursor: pointer; border-radius: 8px; margin: 0 -10px; padding: 14px 10px; transition: background 0.15s; }
+  .history-item-clickable:hover { background: #F0F4F8; }
+  .history-item-clickable:hover .history-proc { color: var(--teal); }
+  .history-arrow { color: var(--muted); font-size: 20px; align-self: center; flex-shrink: 0; }
+
+  /* ─── ASSINATURA ELETRÔNICA ─── */
+  .sig-summary { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: #F0F4F8; border-radius: 10px; margin-bottom: 14px; font-size: 12.5px; }
+  .sig-summary-row { display: flex; justify-content: space-between; padding: 3px 0; }
+  .sig-summary-label { color: var(--muted); }
+  .sig-summary-value { font-weight: 600; color: var(--text); }
+  .sig-canvas-wrap { position: relative; border: 1.5px dashed var(--border); border-radius: 10px; background: #FAFBFC; height: 160px; touch-action: none; cursor: crosshair; margin-bottom: 8px; }
+  .sig-canvas-wrap canvas { width: 100%; height: 100%; display: block; border-radius: 10px; }
+  .sig-placeholder { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; pointer-events: none; gap: 6px; }
+  .sig-baseline { position: absolute; left: 14px; right: 14px; bottom: 26px; border-bottom: 1.5px solid var(--border); }
+  .sig-status-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .sig-status { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
+  .sig-status.signed { color: var(--success); font-weight: 600; }
+  .sig-consent { display: flex; align-items: flex-start; gap: 9px; padding: 11px 13px; background: #E0F2FE; border-radius: 10px; margin-bottom: 16px; }
+  .sig-consent input[type=checkbox] { margin-top: 2px; width: 16px; height: 16px; accent-color: var(--teal); cursor: pointer; flex-shrink: 0; }
+  .sig-consent label { font-size: 11.5px; color: #0C5C7A; line-height: 1.55; cursor: pointer; }
+  .sig-disclaimer { display: flex; gap: 8px; padding: 10px 12px; background: #FEF3C7; border-radius: 10px; margin-top: 14px; }
+  .sig-disclaimer-text { font-size: 11px; color: #92400E; line-height: 1.5; }
+  .sig-cpf-warning { font-size: 11.5px; color: var(--danger); margin-bottom: 10px; padding: 8px 11px; background: #FEE2E2; border-radius: 8px; }
+  .sig-record { background: white; border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-top: 8px; }
+  .sig-record-title { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--success); margin-bottom: 8px; }
+  .sig-record-img { border: 1px solid var(--border); border-radius: 6px; background: #FAFBFC; padding: 4px; margin-bottom: 8px; display: inline-block; }
+  .sig-hash { font-family: monospace; font-size: 10px; color: var(--muted); word-break: break-all; background: #F0F4F8; padding: 6px 8px; border-radius: 6px; margin-top: 4px; }
+  .sig-details-toggle { font-size: 11px; color: var(--teal); cursor: pointer; margin-top: 6px; display: inline-block; text-decoration: underline; }
+  .sig-verify-result { font-size: 11.5px; font-weight: 600; padding: 7px 10px; border-radius: 7px; margin-top: 6px; }
+  .sig-verify-result.ok { background: #D1FAE5; color: #065F46; }
+  .sig-verify-result.fail { background: #FEE2E2; color: #991B1B; }
+  .sig-mismatch-warning { font-size: 12px; font-weight: 600; color: #991B1B; background: #FEE2E2; border: 1.5px solid #FCA5A5; padding: 10px 12px; border-radius: 9px; margin-bottom: 10px; }
+  .btn-assinar { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; background: #0891B2; color: white; border: none; border-radius: 9px; font-family: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+  .btn-assinar:hover { background: #06B6D4; }
+  .btn-assinar.assinado { background: #059669; }
+
+  /* ─── DOCUMENTOS / ANEXOS ─── */
+  .doc-upload-zone { border: 1.5px dashed var(--border); border-radius: 10px; padding: 18px; text-align: center; cursor: pointer; transition: all 0.15s; background: #FAFBFC; }
+  .doc-upload-zone:hover { border-color: var(--teal); background: #F0F9FB; }
+  .doc-upload-zone.dragover { border-color: var(--teal); background: #E0F2FE; }
+  .doc-upload-icon { font-size: 22px; margin-bottom: 6px; }
+  .doc-upload-text { font-size: 12.5px; color: var(--muted); }
+  .doc-upload-hint { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .doc-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 12px; margin-top: 14px; }
+  .doc-thumb { position: relative; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: white; cursor: pointer; transition: transform 0.12s; }
+  .doc-thumb:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+  .doc-thumb-img { width: 100%; height: 90px; object-fit: cover; display: block; background: #F0F4F8; }
+  .doc-thumb-pdf { width: 100%; height: 90px; display: flex; align-items: center; justify-content: center; font-size: 30px; background: #FEE2E2; color: #991B1B; }
+  .doc-thumb-info { padding: 6px 8px; }
+  .doc-thumb-name { font-size: 10.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .doc-thumb-date { font-size: 9.5px; color: var(--muted); }
+  .doc-thumb-remove { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%; background: rgba(0,0,0,0.55); color: white; border: none; font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .doc-thumb-remove:hover { background: rgba(220,38,38,0.85); }
+  .doc-storage-warning { font-size: 11px; color: #92400E; background: #FEF3C7; padding: 8px 11px; border-radius: 8px; margin-top: 10px; }
+  .doc-lightbox-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 2000; align-items: center; justify-content: center; }
+  .doc-lightbox-overlay.open { display: flex; }
+  .doc-lightbox-content { max-width: 90vw; max-height: 85vh; }
+  .doc-lightbox-content img { max-width: 90vw; max-height: 80vh; border-radius: 8px; display: block; }
+  .doc-lightbox-content iframe { width: 80vw; height: 80vh; border: none; border-radius: 8px; background: white; }
+  .doc-lightbox-caption { color: white; text-align: center; margin-top: 10px; font-size: 13px; }
+  .doc-lightbox-close { position: absolute; top: 18px; right: 24px; color: white; font-size: 26px; cursor: pointer; background: none; border: none; }
 
   /* ─── MOBILE TOP BAR ─── */
   .mobile-menu-btn { display: none !important; }
@@ -551,7 +653,7 @@
       <input type="password" id="login-pass" value="admin123" placeholder="••••••••">
     </div>
     <button class="btn-login" onclick="doLogin()">Entrar</button>
-    <div class="login-hint">Use admin@clinica.com / admin123</div>
+    <div id="login-error" style="display:none;margin-top:12px;font-size:12px;color:#E53E3E;background:#FEE2E2;padding:8px 12px;border-radius:8px"></div>
     <div class="login-vvi">Desenvolvido por <strong>VVI Soluções</strong> · Sistema em 48h</div>
   </div>
 </div>
@@ -858,7 +960,7 @@
       <input type="text" id="c-profissional" placeholder="Ex: Dr. João Silva">
     </div>
     <div class="field-row">
-      <div class="field"><label>Data *</label><input type="date" id="c-data"></div>
+      <div class="field"><label>Data *</label><input type="date" id="c-data" onchange="renderSigPreview()"></div>
       <div class="field"><label>Horário *</label><input type="time" id="c-hora" step="1800"></div>
     </div>
     <div class="field-row">
@@ -878,12 +980,71 @@
     <div id="c-proc-area" style="display:none;margin-top:4px">
       <div class="card-title" style="margin-bottom:10px">Procedimentos Realizados</div>
       <div id="c-procs-list"></div>
-      <button class="btn btn-ghost btn-sm" onclick="addProcRow()" style="margin-top:8px">+ Adicionar procedimento</button>
+      <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+        <button class="btn btn-ghost btn-sm" onclick="addProcRow()">+ Adicionar procedimento</button>
+        <button type="button" class="btn-assinar" id="btn-abrir-assinatura" style="margin-left:auto" onclick="openModalAssinatura()">✍️ Assinar com paciente</button>
+      </div>
+      <div id="c-sig-preview"></div>
+      <div class="card-title" style="margin-top:18px;margin-bottom:8px">Documentos e Exames desta Consulta</div>
+      <div class="doc-upload-zone" id="c-doc-dropzone" onclick="document.getElementById('c-doc-input').click()">
+        <div class="doc-upload-icon">📎</div>
+        <div class="doc-upload-text">Clique ou arraste para anexar</div>
+        <div class="doc-upload-hint">Imagens e PDF — fotos, raio-x, exames</div>
+        <input type="file" id="c-doc-input" accept="image/*,application/pdf" multiple style="display:none" onchange="handleDocUpload(event, 'consulta')">
+      </div>
+      <div id="c-doc-gallery" class="doc-gallery"></div>
     </div>
     <input type="hidden" id="c-id">
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modal-consulta')">Cancelar</button>
       <button class="btn btn-teal" onclick="saveConsulta()">Salvar Consulta</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ASSINATURA ELETRÔNICA -->
+<div class="modal-overlay" id="modal-assinatura">
+  <div class="modal" style="position:relative">
+    <button class="modal-close" onclick="closeModal('modal-assinatura')">✕</button>
+    <div class="modal-title">Assinatura do paciente</div>
+    <div class="modal-sub">Confirme a realização do(s) procedimento(s) abaixo</div>
+
+    <div id="sig-cpf-warning-area"></div>
+
+    <div class="sig-summary">
+      <div style="flex:1">
+        <div class="sig-summary-row"><span class="sig-summary-label">Paciente</span><span class="sig-summary-value" id="sig-nome-paciente">–</span></div>
+        <div class="sig-summary-row"><span class="sig-summary-label">CPF</span><span class="sig-summary-value" id="sig-cpf-paciente">–</span></div>
+        <div class="sig-summary-row"><span class="sig-summary-label">Procedimento(s)</span><span class="sig-summary-value" id="sig-procs-paciente">–</span></div>
+        <div class="sig-summary-row"><span class="sig-summary-label">Data e hora</span><span class="sig-summary-value" id="sig-data-paciente">–</span></div>
+      </div>
+    </div>
+
+    <div class="sig-consent">
+      <input type="checkbox" id="sig-consent-check" onchange="updateSigConsent()">
+      <label for="sig-consent-check">Eu, paciente identificado acima, declaro que o(s) procedimento(s) listados foram de fato realizados nesta data, e concordo que a assinatura eletrônica abaixo tem o mesmo valor jurídico de uma assinatura manuscrita, conforme art. 10, §2º da Medida Provisória 2.200-2/2001 e Lei 14.063/2020.</label>
+    </div>
+
+    <p style="font-size:11px;color:var(--muted);margin-bottom:8px">Assine no campo abaixo com o dedo ou mouse</p>
+    <div class="sig-canvas-wrap" id="sig-canvas-wrap">
+      <canvas id="sig-canvas"></canvas>
+      <div class="sig-placeholder" id="sig-placeholder">✍️ Toque aqui para assinar</div>
+      <div class="sig-baseline"></div>
+    </div>
+    <div class="sig-status-row">
+      <span class="sig-status" id="sig-status-text">Aguardando assinatura</span>
+      <button class="btn btn-ghost btn-sm" onclick="clearSignature()">↺ Limpar</button>
+    </div>
+
+    <div class="sig-disclaimer">
+      <span style="font-size:14px">🛡️</span>
+      <div class="sig-disclaimer-text">Ao confirmar, ficam registrados automaticamente o timestamp, o dispositivo e um hash de verificação (SHA-256) gerado a partir do conteúdo assinado, anexados ao prontuário do paciente. Esta é uma assinatura eletrônica simples — não utiliza certificado ICP-Brasil e não possui presunção legal automática de veracidade, mas é válida quando admitida pelas partes (MP 2.200-2/2001, art. 10 §2º).</div>
+    </div>
+
+    <input type="hidden" id="sig-target-consulta-id">
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-assinatura')">Cancelar</button>
+      <button class="btn btn-teal" id="sig-confirm-btn" onclick="confirmarAssinatura()" disabled style="opacity:0.5;cursor:default">Confirmar assinatura</button>
     </div>
   </div>
 </div>
@@ -958,74 +1119,142 @@
   </div>
 </div>
 
+<!-- LIGHTBOX VISUALIZAÇÃO DE DOCUMENTO -->
+<div class="doc-lightbox-overlay" id="doc-lightbox">
+  <button class="doc-lightbox-close" onclick="closeDocLightbox()">✕</button>
+  <div class="doc-lightbox-content" id="doc-lightbox-content"></div>
+  <div style="text-align:center;margin-top:10px">
+    <button id="doc-lightbox-download" onclick="downloadDoc()" style="display:none;padding:8px 18px;background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.4);color:white;border-radius:8px;font-family:inherit;font-size:13px;cursor:pointer">⬇ Baixar PDF</button>
+  </div>
+</div>
+
 <script>
 // ════════════════════════════════════════
 // DATA LAYER — localStorage
 // ════════════════════════════════════════
+// ════════════════════════════════════════
+// FIREBASE DATA LAYER
+// ════════════════════════════════════════
+// Estratégia "shim de compatibilidade":
+// Mantém a interface síncrona DB.get/DB.set que o resto do código usa,
+// mas por baixo lê de um cache em memória (_store) populado do Firestore
+// ao login, e escreve no Firestore de forma assíncrona.
+// Isso evita reescrever todas as funções da UI como async/await.
+// ─────────────────────────────────────────────────────────
+
+let _clinicaId = null;
+const _store = {}; // cache em memória: { colecao: { id: dados } }
+
+// Referência de documento no Firestore
+function _docRef(colecao, id) {
+  const { db, doc, collection } = window._FB;
+  return doc(collection(db, 'clinicas', _clinicaId, colecao), String(id));
+}
+
+// DB — interface síncrona idêntica ao original, mas usa _store em vez de localStorage
 const DB = {
-  get: (k, def) => { try { return JSON.parse(localStorage.getItem('odonto_'+k)) ?? def; } catch { return def; } },
-  set: (k, v) => localStorage.setItem('odonto_'+k, JSON.stringify(v)),
+  // Retorna lista de itens de uma coleção (como array)
+  get: (colecao, def = []) => {
+    if (!_store[colecao]) return def;
+    const items = Object.values(_store[colecao]);
+    // Compatibilidade: se def era {} (config), retorna o primeiro item
+    if (!Array.isArray(def)) return items[0] || def;
+    return items;
+  },
+  // Salva lista inteira de uma coleção (subscreve todos os itens)
+  set: (colecao, dados) => {
+    if (Array.isArray(dados)) {
+      _store[colecao] = {};
+      dados.forEach(item => { if (item.id != null) _store[colecao][String(item.id)] = item; });
+      // Sync to Firestore async — fire and forget
+      dados.forEach(item => { if (item.id != null) _fbSet(colecao, String(item.id), item); });
+    } else {
+      // Objeto único (config)
+      _store[colecao] = { _single: dados };
+      _fbSet(colecao, 'clinica', dados);
+    }
+  },
+  // Salva item individual de uma coleção
+  setOne: (colecao, id, dados) => {
+    if (!_store[colecao]) _store[colecao] = {};
+    _store[colecao][String(id)] = dados;
+    _fbSet(colecao, String(id), dados);
+  },
+  // Remove item de uma coleção
+  deleteOne: (colecao, id) => {
+    if (_store[colecao]) delete _store[colecao][String(id)];
+    _fbDelete(colecao, String(id));
+  },
 };
 
-// Default data
-function initData() {
-  if (!DB.get('init')) {
-    const now = new Date();
-    const today = now.toISOString().split('T')[0];
-    const thisMonth = now.getMonth() + 1;
-    const thisYear = now.getFullYear();
+// Fire-and-forget write to Firestore
+async function _fbSet(colecao, id, dados) {
+  try {
+    const { setDoc } = window._FB;
+    await setDoc(_docRef(colecao, id), dados);
+  } catch (e) { console.warn('Firestore write error:', colecao, id, e); }
+}
+async function _fbDelete(colecao, id) {
+  try {
+    const { deleteDoc } = window._FB;
+    await deleteDoc(_docRef(colecao, id));
+  } catch (e) { console.warn('Firestore delete error:', colecao, id, e); }
+}
 
-    DB.set('config', { nome_clinica: 'Clínica Odontológica', nome_dentista: 'Dr. Admin', telefone: '', cro: '', endereco: '' });
-    DB.set('procedimentos', [
-      { id: 1, nome: 'Restauração', dias: 180 },
-      { id: 2, nome: 'Limpeza/Profilaxia', dias: 180 },
-      { id: 3, nome: 'Canal (Endodontia)', dias: 365 },
-      { id: 4, nome: 'Extração', dias: 30 },
-      { id: 5, nome: 'Clareamento', dias: 365 },
-      { id: 6, nome: 'Ortodontia (manutenção)', dias: 45 },
-      { id: 7, nome: 'Implante (revisão)', dias: 365 },
-      { id: 8, nome: 'Prótese (revisão)', dias: 365 },
-    ]);
+// Carrega todas as coleções do Firestore para o cache _store (rodado uma vez ao login)
+async function loadAllFromFirestore() {
+  const { db, collection, getDocs } = window._FB;
+  const colecoes = ['config', 'procedimentos', 'pacientes', 'consultas', 'alertas', 'bloqueios', 'documentos'];
+  await Promise.all(colecoes.map(async nome => {
+    const snap = await getDocs(collection(db, 'clinicas', _clinicaId, nome));
+    _store[nome] = {};
+    snap.docs.forEach(d => { _store[nome][d.id] = { id: d.id, ...d.data() }; });
+  }));
+}
 
-    // Seed patients
-    const pacs = [
-      { id: 1, nome: 'Ana Paula Mendes', cpf: '123.456.789-00', nasc: `${thisYear-35}-${String(thisMonth).padStart(2,'0')}-15`, tel: '(11) 98765-4321', email: 'ana@email.com', endereco: 'Rua das Flores, 123', obs: '' },
-      { id: 2, nome: 'Carlos Roberto Silva', cpf: '987.654.321-00', nasc: `${thisYear-42}-03-22`, tel: '(11) 91234-5678', email: 'carlos@email.com', endereco: 'Av. Brasil, 456', obs: 'Hipertenso' },
-      { id: 3, nome: 'Fernanda Costa Lima', cpf: '456.789.123-00', nasc: `${thisYear-28}-07-10`, tel: '(11) 94567-8901', email: 'fernanda@email.com', endereco: 'Rua do Sol, 789', obs: '' },
-      { id: 4, nome: 'João Pedro Santos', cpf: '789.123.456-00', nasc: `${thisYear-55}-${String(thisMonth).padStart(2,'0')}-05`, tel: '(11) 97890-1234', email: '', endereco: '', obs: 'Alérgico a penicilina' },
-      { id: 5, nome: 'Maria Oliveira Souza', cpf: '321.654.987-00', nasc: `${thisYear-31}-11-30`, tel: '(11) 93210-9876', email: 'maria@email.com', endereco: 'Travessa Verde, 10', obs: '' },
-    ];
-    DB.set('pacientes', pacs);
-    DB.set('next_paciente_id', 6);
+// Gera ID único string (usado no lugar de inteiros sequenciais)
+function newId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
 
-    // Seed consultas
-    const cons = [
-      { id: 1, paciente_id: 1, data: today, hora: '09:00', status: 'agendada', obs: '', valor: 150, pago: false, procs: [] },
-      { id: 2, paciente_id: 2, data: today, hora: '10:30', status: 'realizada', obs: 'Tratamento concluído', valor: 280, pago: true, procs: [{ proc_id: 1, dente: '16', obs: '', retorno: addDays(today, 180) }] },
-      { id: 3, paciente_id: 3, data: today, hora: '14:00', status: 'agendada', obs: '', valor: 120, pago: false, procs: [] },
-      { id: 4, paciente_id: 5, data: addDays(today, -400), hora: '11:00', status: 'realizada', obs: '', valor: 90, pago: true, procs: [{ proc_id: 2, dente: '', obs: '', retorno: addDays(today, -220) }] },
-      { id: 5, paciente_id: 4, data: addDays(today, -10), hora: '08:30', status: 'realizada', obs: '', valor: 200, pago: false, procs: [{ proc_id: 3, dente: '36', obs: '', retorno: addDays(today, 355) }] },
-    ];
-    DB.set('consultas', cons);
-    DB.set('next_consulta_id', 6);
-
-    // Seed alertas
-    const alertas = [
-      { id: 1, paciente_id: 2, proc_id: 1, data_prevista: addDays(today, -5), status: 'pendente', obs: '' },
-      { id: 2, paciente_id: 5, proc_id: 2, data_prevista: addDays(today, -220), status: 'pendente', obs: '' },
-      { id: 3, paciente_id: 3, proc_id: 2, data_prevista: addDays(today, 20), status: 'pendente', obs: '' },
-      { id: 4, paciente_id: 1, proc_id: 1, data_prevista: addDays(today, 5), status: 'contatado', obs: 'Confirmou retorno' },
-    ];
-    DB.set('alertas', alertas);
-    DB.set('next_alerta_id', 5);
-    DB.set('init', true);
+// Seed para clínica nova (só roda se não houver dados no Firestore ainda)
+async function initData() {
+  // Se já há procedimentos carregados, a clínica já foi inicializada
+  if (Object.keys(_store['procedimentos'] || {}).length > 0) {
+    applyConfigToUI();
+    return;
   }
-  // Load config to UI
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+  const thisMonth = now.getMonth() + 1;
+  const thisYear = now.getFullYear();
+
+  DB.set('config', { nome_clinica: 'Clínica Odontológica', nome_dentista: 'Dr. Admin', telefone: '', cro: '', endereco: '' });
+  DB.set('procedimentos', [
+    { id: '1', nome: 'Restauração', dias: 180 },
+    { id: '2', nome: 'Limpeza/Profilaxia', dias: 180 },
+    { id: '3', nome: 'Canal (Endodontia)', dias: 365 },
+    { id: '4', nome: 'Extração', dias: 30 },
+    { id: '5', nome: 'Clareamento', dias: 365 },
+    { id: '6', nome: 'Ortodontia (manutenção)', dias: 45 },
+    { id: '7', nome: 'Implante (revisão)', dias: 365 },
+    { id: '8', nome: 'Prótese (revisão)', dias: 365 },
+  ]);
+  DB.set('pacientes', [
+    { id: 'p1', nome: 'Ana Paula Mendes', cpf: '123.456.789-00', nasc: `${thisYear-35}-${String(thisMonth).padStart(2,'0')}-15`, tel: '(11) 98765-4321', email: 'ana@email.com', endereco: 'Rua das Flores, 123', obs: '' },
+    { id: 'p2', nome: 'Carlos Roberto Silva', cpf: '987.654.321-00', nasc: `${thisYear-42}-03-22`, tel: '(11) 91234-5678', email: 'carlos@email.com', endereco: 'Av. Brasil, 456', obs: 'Hipertenso' },
+  ]);
+  DB.set('consultas', [
+    { id: 'c1', paciente_id: 'p1', data: today, hora: '09:00', status: 'agendada', obs: '', valor: 150, pago: false, procs: [], profissional: '' },
+    { id: 'c2', paciente_id: 'p2', data: today, hora: '10:30', status: 'realizada', obs: '', valor: 280, pago: true, procs: [{ proc_id: '1', dente: '16', obs: '', retorno: addDays(today, 180) }], profissional: '' },
+  ]);
+  DB.set('alertas', [{ id: 'a1', paciente_id: 'p2', proc_id: '1', data_prevista: addDays(today, -5), status: 'pendente', obs: '' }]);
+  applyConfigToUI();
+}
+
+function applyConfigToUI() {
   const cfg = DB.get('config', {});
-  if (cfg.nome_dentista) {
-    document.getElementById('sidebar-name').textContent = cfg.nome_dentista;
-    document.getElementById('sidebar-initials').textContent = cfg.nome_dentista.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
-  }
+  const nome = cfg.nome_dentista || 'Dr. Admin';
+  document.getElementById('sidebar-name').textContent = nome;
+  document.getElementById('sidebar-initials').textContent = nome.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
 }
 
 function addDays(dateStr, n) {
@@ -1045,25 +1274,79 @@ function fmtMoney(n) {
 }
 
 // ════════════════════════════════════════
-// AUTH
+// AUTH — Firebase Authentication
 // ════════════════════════════════════════
-function doLogin() {
-  const email = document.getElementById('login-email').value;
-  const pass = document.getElementById('login-pass').value;
-  if (email === 'admin@clinica.com' && pass === 'admin123') {
-    document.getElementById('login-screen').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
-    document.getElementById('mobile-btn').style.display = '';
-    initData();
+
+// Mostra o app após login bem-sucedido
+async function onLoginSuccess(user) {
+  _clinicaId = user.uid;
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('mobile-btn').style.display = '';
+  document.getElementById('login-error').style.display = 'none';
+  showAppLoading(true);
+  try {
+    await loadAllFromFirestore(); // popula _store do Firestore
+    await initData();             // seed se necessário
     renderDashboard();
     updateBadgeAlertas();
     loadConfig();
-  } else {
-    alert('Credenciais inválidas. Use admin@clinica.com / admin123');
+  } finally {
+    showAppLoading(false);
   }
 }
 
-function doLogout() {
+function showAppLoading(show) {
+  let el = document.getElementById('app-loading');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'app-loading';
+    el.style.cssText = 'position:fixed;inset:0;background:rgba(13,33,55,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;color:white;font-size:15px;font-family:inherit';
+    el.innerHTML = '<div style="text-align:center"><div style="font-size:28px;margin-bottom:8px">🦷</div>Carregando...</div>';
+    document.body.appendChild(el);
+  }
+  el.style.display = show ? 'flex' : 'none';
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-pass').value;
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+  if (!email || !pass) { errEl.textContent = 'Preencha e-mail e senha.'; errEl.style.display = 'block'; return; }
+
+  try {
+    const { auth, signInWithEmailAndPassword } = window._FB;
+    const cred = await signInWithEmailAndPassword(auth, email, pass);
+    await onLoginSuccess(cred.user);
+  } catch (err) {
+    // Usuário não existe ainda? Cria automaticamente (primeira vez)
+    if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
+      try {
+        const { auth, createUserWithEmailAndPassword } = window._FB;
+        const cred = await createUserWithEmailAndPassword(auth, email, pass);
+        await onLoginSuccess(cred.user);
+      } catch (err2) {
+        errEl.textContent = 'Erro ao criar conta: ' + err2.message;
+        errEl.style.display = 'block';
+      }
+    } else {
+      const msgs = {
+        'auth/wrong-password':    'Senha incorreta.',
+        'auth/invalid-email':     'E-mail inválido.',
+        'auth/too-many-requests': 'Muitas tentativas. Aguarde alguns minutos.',
+      };
+      errEl.textContent = msgs[err.code] || 'Erro: ' + err.message;
+      errEl.style.display = 'block';
+    }
+  }
+}
+
+async function doLogout() {
+  const { auth, signOut } = window._FB;
+  await signOut(auth);
+  _clinicaId = null;
+  Object.keys(_store).forEach(k => delete _store[k]);
   document.getElementById('app').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
 }
@@ -1365,10 +1648,9 @@ function saveBloqueio() {
   if (motivo === 'outro' && !obs) { showBloqueioError('Descreva o motivo do bloqueio.'); return; }
 
   const bloqueios = DB.get('bloqueios', []);
-  const id = DB.get('next_bloqueio_id', 200);
+  const id = newId();
   bloqueios.push({ id, data_inicio: dataIni, data_fim: dataFim, hora_inicio: horaIni, hora_fim: horaFim, motivo, obs });
   DB.set('bloqueios', bloqueios);
-  DB.set('next_bloqueio_id', id + 1);
   closeModal('modal-bloqueio');
   renderAgenda();
 }
@@ -1560,6 +1842,9 @@ function openEditConsulta(id) {
   procsList.innerHTML = '';
   (c.procs || []).forEach(pr => addProcRow(pr));
   document.getElementById('c-error').style.display = 'none';
+  pendingAssinatura = c.assinatura || null;
+  renderSigPreview();
+  renderDocGallery('c-doc-gallery', c.paciente_id, c.id);
   document.getElementById('modal-consulta').classList.add('open');
 }
 
@@ -1575,11 +1860,25 @@ function clearConsultaModal() {
   document.getElementById('c-obs').value = '';
   document.getElementById('c-procs-list').innerHTML = '';
   document.getElementById('c-error').style.display = 'none';
+  pendingAssinatura = null;
+  renderSigPreview();
+  const docGalleryEl = document.getElementById('c-doc-gallery');
+  if (docGalleryEl) docGalleryEl.innerHTML = '';
 }
 
 function updateProcArea() {
   const status = document.getElementById('c-status').value;
   document.getElementById('c-proc-area').style.display = COMPLETED_STATUSES.includes(status) ? 'block' : 'none';
+  updateDocZoneHint();
+}
+
+function updateDocZoneHint() {
+  const hint = document.querySelector('#c-doc-dropzone .doc-upload-hint');
+  if (!hint) return;
+  const temId = !!document.getElementById('c-id').value;
+  hint.textContent = temId
+    ? 'Imagens e PDF — fotos, raio-x, exames'
+    : 'Salve a consulta primeiro para poder anexar documentos a ela';
 }
 
 document.addEventListener('change', e => { if (e.target.id === 'c-status') updateProcArea(); });
@@ -1591,9 +1890,10 @@ function addProcRow(pr) {
   const div = document.createElement('div');
   div.style = 'display:flex;gap:8px;margin-bottom:8px;align-items:center';
   div.id = 'proc-row-' + id;
-  const selHtml = `<select style="flex:1;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;outline:none">${procs.map(p => `<option value="${p.id}" ${pr && pr.proc_id == p.id ? 'selected' : ''}>${p.nome} (${p.dias}d)</option>`).join('')}</select>`;
-  div.innerHTML = `${selHtml}<input type="text" placeholder="Dente (ex: 16)" value="${pr?.dente||''}" style="width:80px;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;outline:none"><button onclick="document.getElementById('proc-row-${id}').remove()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:16px">✕</button>`;
+  const selHtml = `<select onchange="renderSigPreview()" style="flex:1;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;outline:none">${procs.map(p => `<option value="${p.id}" ${pr && pr.proc_id == p.id ? 'selected' : ''}>${p.nome} (${p.dias}d)</option>`).join('')}</select>`;
+  div.innerHTML = `${selHtml}<input type="text" placeholder="Dente (ex: 16)" value="${pr?.dente||''}" oninput="renderSigPreview()" style="width:80px;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;outline:none"><button onclick="document.getElementById('proc-row-${id}').remove();renderSigPreview()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:16px">✕</button>`;
   document.getElementById('c-procs-list').appendChild(div);
+  renderSigPreview();
 }
 
 function searchPacienteConsulta() {
@@ -1611,6 +1911,473 @@ function selectPacienteConsulta(id, nome) {
   document.getElementById('c-paciente-id').value = id;
   document.getElementById('c-paciente-dropdown').style.display = 'none';
 }
+
+// ════════════════════════════════════════
+// ASSINATURA ELETRÔNICA
+// ════════════════════════════════════════
+let pendingAssinatura = null; // { imgData, hash, timestamp, paciente_id, paciente_nome, paciente_cpf, procsTexto, dataConsulta, dispositivo, consentimento }
+let sigCtx = null, sigDrawing = false, sigHasStroke = false, sigDpr = window.devicePixelRatio || 1;
+
+// Lê o formulário de procedimentos da consulta e monta o mesmo texto usado tanto
+// na tela de assinatura quanto na verificação de "o conteúdo ainda é o mesmo".
+function buildProcsTextoFromForm() {
+  const procsTexto = [];
+  document.querySelectorAll('#c-procs-list > div').forEach(row => {
+    const sel = row.querySelector('select');
+    const inp = row.querySelector('input');
+    if (sel) {
+      const proc = DB.get('procedimentos', []).find(pr => pr.id === parseInt(sel.value));
+      procsTexto.push((proc?.nome || 'Procedimento') + (inp?.value ? ' — dente ' + inp.value : ''));
+    }
+  });
+  return procsTexto;
+}
+
+function renderSigPreview() {
+  const el = document.getElementById('c-sig-preview');
+  if (!el) return;
+  if (!pendingAssinatura) {
+    el.innerHTML = '';
+    const btn = document.getElementById('btn-abrir-assinatura');
+    if (btn) { btn.classList.remove('assinado'); btn.textContent = '✍️ Assinar com paciente'; }
+    return;
+  }
+  const btn = document.getElementById('btn-abrir-assinatura');
+  if (btn) { btn.classList.add('assinado'); btn.textContent = '✓ Assinatura registrada'; }
+
+  // Detecta, em tempo real, se o que está no formulário agora já diverge do que
+  // foi assinado — para avisar ANTES de tentar salvar, não só no momento do clique.
+  const procsTextoAtual = buildProcsTextoFromForm();
+  const procsTextoAtualStr = procsTextoAtual.length ? procsTextoAtual.join(', ') : 'Consulta';
+  const dataAtual = document.getElementById('c-data').value;
+  const divergiu = procsTextoAtualStr !== pendingAssinatura.procsTexto || dataAtual !== pendingAssinatura.dataConsulta;
+
+  const avisoDivergencia = divergiu ? `
+    <div class="sig-mismatch-warning">⚠️ O procedimento ou a data foram alterados depois desta assinatura. Não será possível salvar até que a assinatura seja refeita ou a alteração seja desfeita.</div>` : '';
+
+  el.innerHTML = `
+    ${avisoDivergencia}
+    <div class="sig-record">
+      <div class="sig-record-title">✓ Procedimento assinado pelo paciente</div>
+      <div class="sig-record-img"><img src="${pendingAssinatura.imgData}" style="display:block;width:140px;height:45px;object-fit:contain"></div>
+      <div style="font-size:11.5px;color:var(--muted);line-height:1.6">
+        ${pendingAssinatura.paciente_nome} · CPF ${pendingAssinatura.paciente_cpf || 'não informado'}<br>
+        ${new Date(pendingAssinatura.timestamp).toLocaleString('pt-BR')} · ${pendingAssinatura.dispositivo}
+      </div>
+      <div class="sig-details-toggle" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">Ver detalhes técnicos</div>
+      <div class="sig-hash" style="display:none">
+        hash sha-256: ${pendingAssinatura.hash}
+        <div style="margin-top:8px"><button class="btn btn-ghost btn-sm" onclick="verificarIntegridade(pendingAssinatura, this)">Verificar integridade</button></div>
+        <div class="sig-verify-result" style="display:none"></div>
+      </div>
+      <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="pendingAssinatura=null;renderSigPreview()">Remover e assinar novamente</button>
+    </div>`;
+}
+
+function openModalAssinatura() {
+  const pacId = parseInt(document.getElementById('c-paciente-id').value);
+  if (!pacId) { showModalError('Selecione um paciente antes de coletar a assinatura.'); return; }
+  const p = DB.get('pacientes', []).find(p => p.id === pacId);
+  if (!p) return;
+
+  const data = document.getElementById('c-data').value || new Date().toISOString().split('T')[0];
+  const hora = document.getElementById('c-hora').value || '--:--';
+  const procsTexto = buildProcsTextoFromForm();
+
+  document.getElementById('sig-nome-paciente').textContent = p.nome;
+  document.getElementById('sig-cpf-paciente').textContent = p.cpf || 'Não informado';
+  document.getElementById('sig-procs-paciente').textContent = procsTexto.length ? procsTexto.join(', ') : 'Consulta';
+  document.getElementById('sig-data-paciente').textContent = fmtDate(data) + ' às ' + hora;
+
+  // CPF warning — vínculo ao CPF é parte da robustez jurídica
+  const warnArea = document.getElementById('sig-cpf-warning-area');
+  warnArea.innerHTML = !p.cpf
+    ? '<div class="sig-cpf-warning">⚠️ Este paciente não tem CPF cadastrado. Recomendamos preencher o CPF na ficha do paciente antes de assinar — o vínculo ao CPF reforça a autenticidade da assinatura eletrônica.</div>'
+    : '';
+
+  document.getElementById('sig-target-consulta-id').value = document.getElementById('c-id').value || '';
+  document.getElementById('sig-consent-check').checked = false;
+  document.getElementById('sig-confirm-btn').setAttribute('disabled', 'true');
+  document.getElementById('sig-confirm-btn').style.opacity = '0.5';
+  document.getElementById('sig-confirm-btn').style.cursor = 'default';
+
+  document.getElementById('modal-assinatura').classList.add('open');
+  setTimeout(initSigCanvas, 50);
+}
+
+function initSigCanvas() {
+  const canvas = document.getElementById('sig-canvas');
+  const wrap = document.getElementById('sig-canvas-wrap');
+  const rect = wrap.getBoundingClientRect();
+  canvas.width = rect.width * sigDpr;
+  canvas.height = rect.height * sigDpr;
+  sigCtx = canvas.getContext('2d');
+  sigCtx.scale(sigDpr, sigDpr);
+  sigCtx.lineWidth = 2.2;
+  sigCtx.lineCap = 'round';
+  sigCtx.lineJoin = 'round';
+  sigCtx.strokeStyle = '#1E293B';
+  sigHasStroke = false;
+  document.getElementById('sig-placeholder').style.display = 'flex';
+  updateSigStatus();
+
+  function getPos(e) {
+    const r = canvas.getBoundingClientRect();
+    const cx = e.touches ? e.touches[0].clientX : e.clientX;
+    const cy = e.touches ? e.touches[0].clientY : e.clientY;
+    return { x: cx - r.left, y: cy - r.top };
+  }
+  function start(e) {
+    e.preventDefault();
+    sigDrawing = true;
+    const p = getPos(e);
+    sigCtx.beginPath();
+    sigCtx.moveTo(p.x, p.y);
+    document.getElementById('sig-placeholder').style.display = 'none';
+  }
+  function move(e) {
+    if (!sigDrawing) return;
+    e.preventDefault();
+    const p = getPos(e);
+    sigCtx.lineTo(p.x, p.y);
+    sigCtx.stroke();
+    if (!sigHasStroke) { sigHasStroke = true; updateSigStatus(); }
+  }
+  function end() { sigDrawing = false; }
+
+  canvas.onmousedown = start;
+  canvas.onmousemove = move;
+  window.onmouseup = end;
+  canvas.ontouchstart = start;
+  canvas.ontouchmove = move;
+  canvas.ontouchend = end;
+}
+
+function clearSignature() {
+  const canvas = document.getElementById('sig-canvas');
+  if (sigCtx) sigCtx.clearRect(0, 0, canvas.width, canvas.height);
+  sigHasStroke = false;
+  document.getElementById('sig-placeholder').style.display = 'flex';
+  updateSigStatus();
+}
+
+function updateSigConsent() { updateSigStatus(); }
+
+function updateSigStatus() {
+  const statusEl = document.getElementById('sig-status-text');
+  const consent = document.getElementById('sig-consent-check').checked;
+  const ready = sigHasStroke && consent;
+
+  statusEl.textContent = !sigHasStroke ? 'Aguardando assinatura' : !consent ? 'Assinatura feita — confirme o consentimento acima' : 'Pronto para confirmar';
+  statusEl.className = 'sig-status' + (ready ? ' signed' : '');
+
+  const btn = document.getElementById('sig-confirm-btn');
+  if (ready) {
+    btn.removeAttribute('disabled');
+    btn.style.opacity = '1';
+    btn.style.cursor = 'pointer';
+  } else {
+    btn.setAttribute('disabled', 'true');
+    btn.style.opacity = '0.5';
+    btn.style.cursor = 'default';
+  }
+}
+
+async function sha256Hex(message) {
+  const enc = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function confirmarAssinatura() {
+  if (!sigHasStroke || !document.getElementById('sig-consent-check').checked) return;
+
+  const canvas = document.getElementById('sig-canvas');
+  const imgData = canvas.toDataURL('image/png');
+  const pacId = parseInt(document.getElementById('c-paciente-id').value);
+  const p = DB.get('pacientes', []).find(p => p.id === pacId);
+  const timestamp = new Date().toISOString();
+  const dispositivo = /Mobile|Android|iPhone/i.test(navigator.userAgent) ? 'Celular' : /iPad|Tablet/i.test(navigator.userAgent) ? 'Tablet' : 'Computador';
+
+  const procsTexto = document.getElementById('sig-procs-paciente').textContent;
+  const dataConsulta = document.getElementById('c-data').value;
+  const pacienteNome = p?.nome || '';
+  const pacienteCpf = p?.cpf || '';
+
+  // Hash real (SHA-256), calculado SOMENTE a partir de valores congelados aqui dentro
+  // do próprio objeto de assinatura — nunca buscando de volta no cadastro do paciente
+  // ou na consulta ao vivo. Isso é o que torna a verificação confiável: se o nome do
+  // paciente for corrigido na ficha dele meses depois, isso não pode "quebrar" o hash
+  // de uma assinatura antiga, porque o hash não depende do dado atual, e sim do dado
+  // exato que existia no momento em que foi assinado.
+  const conteudoParaHash = JSON.stringify({
+    paciente_id: pacId,
+    paciente_nome: pacienteNome,
+    paciente_cpf: pacienteCpf,
+    procedimentos: procsTexto,
+    data_consulta: dataConsulta,
+    timestamp,
+    assinatura_img: imgData,
+  });
+  const hash = await sha256Hex(conteudoParaHash);
+
+  pendingAssinatura = {
+    imgData,
+    hash,
+    timestamp,
+    paciente_id: pacId,
+    paciente_nome: pacienteNome,
+    paciente_cpf: pacienteCpf,
+    procsTexto,
+    dataConsulta,
+    dispositivo,
+    consentimento: true,
+  };
+
+  closeModal('modal-assinatura');
+  renderSigPreview();
+}
+
+// Recalcula o hash a partir dos valores CONGELADOS dentro do próprio registro de
+// assinatura (nunca do cadastro atual do paciente) e compara com o hash salvo.
+// Iguais = nada mudou nesse registro desde a assinatura. Diferentes = o registro
+// da assinatura foi adulterado depois de criado.
+async function verificarIntegridade(assinatura, btnEl) {
+  const conteudoParaHash = JSON.stringify({
+    paciente_id: assinatura.paciente_id,
+    paciente_nome: assinatura.paciente_nome,
+    paciente_cpf: assinatura.paciente_cpf,
+    procedimentos: assinatura.procsTexto,
+    data_consulta: assinatura.dataConsulta,
+    timestamp: assinatura.timestamp,
+    assinatura_img: assinatura.imgData,
+  });
+  const hashRecalculado = await sha256Hex(conteudoParaHash);
+  const integro = hashRecalculado === assinatura.hash;
+
+  const resultEl = btnEl.parentElement.querySelector('.sig-verify-result');
+  if (resultEl) {
+    resultEl.style.display = 'block';
+    resultEl.className = 'sig-verify-result ' + (integro ? 'ok' : 'fail');
+    resultEl.textContent = integro
+      ? '✓ Íntegro — nada foi alterado desde a assinatura'
+      : '🚩 Alerta — o conteúdo não corresponde mais ao que foi assinado';
+  }
+}
+
+// Mesma verificação, mas buscando a assinatura salva a partir do ID da consulta —
+// usado no histórico do paciente, onde o objeto já está persistido no localStorage.
+function verificarIntegridadePorConsultaId(consultaId, btnEl) {
+  const consulta = DB.get('consultas', []).find(c => c.id === consultaId);
+  if (!consulta || !consulta.assinatura) return;
+  verificarIntegridade(consulta.assinatura, btnEl);
+}
+
+// ════════════════════════════════════════
+// DOCUMENTOS E EXAMES (anexos)
+// ════════════════════════════════════════
+const DOC_MAX_SIZE_MB = 5;
+
+// uid() substituído por newId() definido na camada de dados
+
+// Lê arquivos selecionados, valida tipo/tamanho, converte para base64 e salva em
+// DB('documentos'). contexto = 'consulta' (usa o paciente/consulta abertos no modal)
+// ou 'perfil' (anexo geral do paciente, sem vínculo a uma consulta).
+function handleDocUpload(event, contexto, pacienteIdDireto) {
+  const files = Array.from(event.target.files || []);
+  event.target.value = ''; // permite selecionar o mesmo arquivo de novo depois
+  if (files.length === 0) return;
+
+  const pacienteId = contexto === 'perfil' ? pacienteIdDireto : parseInt(document.getElementById('c-paciente-id').value);
+  if (!pacienteId) {
+    if (contexto === 'consulta') showModalError('Selecione um paciente antes de anexar documentos.');
+    return;
+  }
+  const consultaId = contexto === 'consulta' ? (document.getElementById('c-id').value || null) : null;
+  if (contexto === 'consulta' && !consultaId) {
+    showModalError('Salve a consulta antes de anexar documentos a ela. Você pode anexar documentos gerais a qualquer momento na ficha do paciente.');
+    return;
+  }
+
+  files.forEach(file => {
+    const tipoValido = file.type.startsWith('image/') || file.type === 'application/pdf';
+    if (!tipoValido) {
+      alert(`"${file.name}" não é uma imagem ou PDF e não foi anexado.`);
+      return;
+    }
+    if (file.size > DOC_MAX_SIZE_MB * 1024 * 1024) {
+      alert(`"${file.name}" tem mais de ${DOC_MAX_SIZE_MB}MB e não foi anexado. Tente uma versão menor ou comprimida.`);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const documentos = DB.get('documentos', []);
+      documentos.push({
+        id: newId(),
+        paciente_id: pacienteId,
+        consulta_id: consultaId,
+        nome: file.name,
+        tipo: file.type.startsWith('image/') ? 'image' : 'pdf',
+        tamanho: file.size,
+        dataUpload: new Date().toISOString(),
+        imgData: reader.result,
+      });
+      DB.set('documentos', documentos);
+
+      if (contexto === 'consulta') renderDocGallery('c-doc-gallery', pacienteId, consultaId);
+      else renderDocGallery('perfil-doc-gallery', pacienteId, null);
+
+      checkStorageUsage(contexto);
+    };
+    reader.onerror = () => alert(`Não foi possível ler o arquivo "${file.name}". Tente novamente.`);
+    reader.readAsDataURL(file);
+  });
+}
+
+// Estima o tamanho total dos documentos no cache em memória
+function checkStorageUsage(contexto) {
+  const docs = DB.get('documentos', []);
+  const totalBytes = docs.reduce((s, d) => s + (d.imgData ? d.imgData.length * 0.75 : 0), 0);
+  const totalMb = totalBytes / (1024 * 1024);
+  const WARN_MB = 50; // Firebase Storage tem limite generoso, aviso só acima de 50MB
+  if (totalMb < WARN_MB) return;
+
+  const targetId = contexto === 'consulta' ? 'c-doc-gallery' : 'perfil-doc-gallery';
+  const el = document.getElementById(targetId);
+  if (el && !el.querySelector('.doc-storage-warning')) {
+    const warn = document.createElement('div');
+    warn.className = 'doc-storage-warning';
+    warn.style.gridColumn = '1 / -1';
+    warn.textContent = `⚠️ Volume de documentos está grande (~${totalMb.toFixed(0)}MB). Considere exportar backup e remover documentos antigos.`;
+    el.appendChild(warn);
+  }
+}
+
+// Renderiza a galeria de documentos filtrada por paciente, e opcionalmente por
+// consulta específica (quando consultaId é informado) ou só os gerais (null
+// explícito vindo do perfil — nesse caso mostra TODOS os documentos do paciente,
+// gerais e de consultas, para servir como histórico completo de exames).
+function renderDocGallery(targetElId, pacienteId, consultaId) {
+  const el = document.getElementById(targetElId);
+  if (!el) return;
+  const todos = DB.get('documentos', []);
+
+  let docs;
+  if (targetElId === 'c-doc-gallery') {
+    // Dentro do modal de consulta: só os documentos JÁ anexados a esta consulta
+    // específica (se for uma consulta nova, ainda sem ID, não há nada salvo ainda).
+    docs = consultaId ? todos.filter(d => String(d.consulta_id) === String(consultaId)) : [];
+  } else {
+    // No perfil do paciente: todos os documentos dele, gerais e de qualquer consulta —
+    // funciona como o histórico completo de exames/imagens daquele paciente.
+    docs = todos.filter(d => d.paciente_id === pacienteId);
+  }
+
+  docs.sort((a, b) => (b.dataUpload || '').localeCompare(a.dataUpload || ''));
+
+  if (docs.length === 0) {
+    el.innerHTML = '';
+    return;
+  }
+
+  el.innerHTML = docs.map(d => {
+    const dataStr = d.dataUpload ? fmtDate(d.dataUpload.split('T')[0]) : '–';
+    const thumb = d.tipo === 'image'
+      ? `<img class="doc-thumb-img" src="${d.imgData || ''}" loading="lazy">`
+      : `<div class="doc-thumb-pdf">📄<div style="font-size:9px;margin-top:4px;color:#991B1B;font-weight:600">Abre em nova aba</div></div>`;
+    const title = d.tipo === 'image' ? 'Clique para ampliar' : 'Clique para abrir o PDF em nova aba';
+    return `<div class="doc-thumb" onclick="openDocLightbox('${d.id}')" title="${title}">
+      <button class="doc-thumb-remove" onclick="event.stopPropagation();removeDocumento('${d.id}','${targetElId}',${pacienteId},${consultaId ? `'${consultaId}'` : null})" title="Remover">✕</button>
+      ${thumb}
+      <div class="doc-thumb-info">
+        <div class="doc-thumb-name" title="${d.nome || ''}">${d.nome || 'Documento'}</div>
+        <div class="doc-thumb-date">${dataStr}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+let _currentBlobUrl = null;
+let _currentDocId = null;
+
+function blobFromBase64(base64, mime) {
+  const byteChars = atob(base64);
+  const byteNums = new Uint8Array(byteChars.length);
+  for (let i = 0; i < byteChars.length; i++) byteNums[i] = byteChars.charCodeAt(i);
+  return new Blob([byteNums], { type: mime });
+}
+
+function openDocLightbox(docId) {
+  const doc = DB.get('documentos', []).find(d => d.id === docId);
+  if (!doc) return;
+  _currentDocId = docId;
+
+  const dataStr = doc.dataUpload ? fmtDate(doc.dataUpload.split('T')[0]) : '–';
+
+  if (doc.tipo === 'image') {
+    document.getElementById('doc-lightbox-content').innerHTML =
+      `<img src="${doc.imgData || ''}"><div class="doc-lightbox-caption">${doc.nome || 'Documento'} · ${dataStr}</div>`;
+    document.getElementById('doc-lightbox-download').style.display = 'none';
+    document.getElementById('doc-lightbox').classList.add('open');
+  } else {
+    if (!doc.imgData || !doc.imgData.includes(',')) {
+      alert('Não foi possível abrir este documento — o arquivo pode estar corrompido. Tente remover e anexar novamente.');
+      return;
+    }
+    const base64 = doc.imgData.split(',')[1];
+    const blob = blobFromBase64(base64, 'application/pdf');
+    if (_currentBlobUrl) URL.revokeObjectURL(_currentBlobUrl);
+    _currentBlobUrl = URL.createObjectURL(blob);
+    window.open(_currentBlobUrl, '_blank');
+    setTimeout(() => { URL.revokeObjectURL(_currentBlobUrl); _currentBlobUrl = null; }, 10000);
+  }
+}
+
+function closeDocLightbox() {
+  document.getElementById('doc-lightbox').classList.remove('open');
+  document.getElementById('doc-lightbox-content').innerHTML = '';
+  document.getElementById('doc-lightbox-download').style.display = 'none';
+  if (_currentBlobUrl) { URL.revokeObjectURL(_currentBlobUrl); _currentBlobUrl = null; }
+  _currentDocId = null;
+}
+
+function downloadDoc() {
+  const doc = DB.get('documentos', []).find(d => d.id === _currentDocId);
+  if (!doc || !doc.imgData || !doc.imgData.includes(',')) return;
+  const base64 = doc.imgData.split(',')[1];
+  const blob = blobFromBase64(base64, 'application/pdf');
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = doc.nome || 'documento.pdf';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+function removeDocumento(docId, targetElId, pacienteId, consultaId) {
+  if (!confirm('Remover este documento? Esta ação não pode ser desfeita.')) return;
+  const documentos = DB.get('documentos', []).filter(d => d.id !== docId);
+  DB.set('documentos', documentos);
+  renderDocGallery(targetElId, pacienteId, consultaId === 'null' ? null : consultaId);
+}
+
+// Suporte a arrastar-e-soltar na zona de upload da consulta (a do perfil também
+// funciona por clique; o essencial pedido foi clique + arrastar no fluxo principal).
+document.addEventListener('DOMContentLoaded', () => {
+  const zone = document.getElementById('c-doc-dropzone');
+  if (!zone) return;
+  ['dragover', 'dragleave', 'drop'].forEach(evt => {
+    zone.addEventListener(evt, e => {
+      e.preventDefault();
+      zone.classList.toggle('dragover', evt === 'dragover');
+    });
+  });
+  zone.addEventListener('drop', e => {
+    const files = e.dataTransfer.files;
+    if (files && files.length) handleDocUpload({ target: { files, value: '' } }, 'consulta');
+  });
+});
 
 function showModalError(msg) {
   const el = document.getElementById('c-error');
@@ -1650,30 +2417,51 @@ function saveConsulta() {
   const conflito = consultas.find(c => c.data === data && c.hora === hora && String(c.id) !== String(editId));
   if (conflito) { showModalError('Já existe uma consulta agendada neste horário. Escolha outro horário.'); return; }
 
+  // TRAVA DE INTEGRIDADE: se existe uma assinatura pendente, o conteúdo que ela
+  // cobre (procedimentos e data da consulta) não pode ter sido alterado depois de
+  // assinado. Sem essa checagem, dava pra assinar e em seguida trocar procedimento
+  // ou data sem nenhum aviso — o hash salvo continuaria "batendo" porque nunca
+  // seria recalculado, escondendo a alteração.
+  if (pendingAssinatura) {
+    const procsTextoAtual = buildProcsTextoFromForm();
+    const procsTextoAtualStr = procsTextoAtual.length ? procsTextoAtual.join(', ') : 'Consulta';
+    const mudouProcedimentos = procsTextoAtualStr !== pendingAssinatura.procsTexto;
+    const mudouData = data !== pendingAssinatura.dataConsulta;
+
+    if (mudouProcedimentos || mudouData) {
+      const motivos = [];
+      if (mudouProcedimentos) motivos.push('os procedimentos registrados');
+      if (mudouData) motivos.push('a data da consulta');
+      showModalError(
+        'Não é possível salvar: ' + motivos.join(' e ') + ' foram alterados depois que o paciente assinou. ' +
+        'A assinatura eletrônica cobre exatamente o que estava registrado no momento em que foi feita. ' +
+        'Remova a assinatura no card abaixo e colete uma nova com o conteúdo atualizado.'
+      );
+      return;
+    }
+  }
+
   let consulta;
   if (editId) {
     const idx = consultas.findIndex(c => c.id == editId);
-    consultas[idx] = { ...consultas[idx], paciente_id: pacId, data, hora, status, profissional, valor: parseFloat(document.getElementById('c-valor').value)||0, obs: document.getElementById('c-obs').value, procs };
+    consultas[idx] = { ...consultas[idx], paciente_id: pacId, data, hora, status, profissional, valor: parseFloat(document.getElementById('c-valor').value)||0, obs: document.getElementById('c-obs').value, procs, assinatura: pendingAssinatura };
     consulta = consultas[idx];
   } else {
-    const id = DB.get('next_consulta_id', 100);
-    consulta = { id, paciente_id: pacId, data, hora, status, profissional, valor: parseFloat(document.getElementById('c-valor').value)||0, pago: false, obs: document.getElementById('c-obs').value, procs };
+    const id = newId();
+    consulta = { id, paciente_id: pacId, data, hora, status, profissional, valor: parseFloat(document.getElementById('c-valor').value)||0, pago: false, obs: document.getElementById('c-obs').value, procs, assinatura: pendingAssinatura };
     consultas.push(consulta);
-    DB.set('next_consulta_id', id + 1);
   }
   DB.set('consultas', consultas);
 
   // Create alertas for procs
   if (COMPLETED_STATUSES.includes(status) && procs.length > 0) {
     const alertas = DB.get('alertas', []);
-    let nextAId = DB.get('next_alerta_id', 100);
     procs.forEach(pr => {
       if (pr.retorno) {
-        alertas.push({ id: nextAId++, paciente_id: pacId, proc_id: pr.proc_id, data_prevista: pr.retorno, status: 'pendente', obs: '' });
+        alertas.push({ id: newId(), paciente_id: pacId, proc_id: pr.proc_id, data_prevista: pr.retorno, status: 'pendente', obs: '' });
       }
     });
     DB.set('alertas', alertas);
-    DB.set('next_alerta_id', nextAId);
   }
 
   closeModal('modal-consulta');
@@ -1785,7 +2573,9 @@ function viewPerfil(id) {
         ${consultas.length === 0 ? '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-text">Nenhuma consulta</div></div>' :
           consultas.map(c => {
             const procNomes = (c.procs||[]).map(pr => procs.find(p=>p.id===pr.proc_id)?.nome||'').filter(Boolean).join(', ');
-            return `<div class="history-item"><div class="history-dot"></div><div><div class="history-date">${fmtDate(c.data)}</div><div class="history-proc">${procNomes || 'Consulta'}</div><div class="history-obs">${statusLabel(c.status)} · ${fmtMoney(c.valor)}</div></div></div>`;
+            const sigBadge = c.assinatura ? ` <span class="badge badge-green" style="margin-left:6px">✍️ Assinado</span>` : '';
+            const sigDetail = c.assinatura ? `<div style="margin-top:6px"><img src="${c.assinatura.imgData}" style="width:100px;height:32px;object-fit:contain;border:1px solid var(--border);border-radius:6px;background:#FAFBFC;padding:2px"><div class="sig-details-toggle" onclick="event.stopPropagation();this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">Ver detalhes técnicos</div><div class="sig-hash" style="display:none" onclick="event.stopPropagation()">hash: ${c.assinatura.hash}<div style="margin-top:8px"><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();verificarIntegridadePorConsultaId(${c.id}, this)">Verificar integridade</button></div><div class="sig-verify-result" style="display:none"></div></div></div>` : '';
+            return `<div class="history-item history-item-clickable" onclick="openEditConsulta(${c.id})" title="Clique para ver os detalhes desta consulta"><div class="history-dot"></div><div style="flex:1"><div class="history-date">${fmtDate(c.data)}</div><div class="history-proc">${procNomes || 'Consulta'}${sigBadge}</div><div class="history-obs">${statusLabel(c.status)} · ${fmtMoney(c.valor)}</div>${sigDetail}</div><div class="history-arrow">›</div></div>`;
           }).join('')
         }
       </div>
@@ -1799,8 +2589,19 @@ function viewPerfil(id) {
           }).join('')
         }
       </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">Documentos e Exames do Paciente</div>
+      <div class="doc-upload-zone" onclick="document.getElementById('perfil-doc-input').click()">
+        <div class="doc-upload-icon">📎</div>
+        <div class="doc-upload-text">Clique ou arraste para anexar</div>
+        <div class="doc-upload-hint">Imagens e PDF — fotos, raio-x, exames (não ligado a uma consulta específica)</div>
+        <input type="file" id="perfil-doc-input" accept="image/*,application/pdf" multiple style="display:none" onchange="handleDocUpload(event, 'perfil', ${p.id})">
+      </div>
+      <div id="perfil-doc-gallery" class="doc-gallery"></div>
     </div>`;
 
+  renderDocGallery('perfil-doc-gallery', id, null);
   navigate('perfil');
 }
 
@@ -1849,9 +2650,7 @@ function savePaciente() {
     const idx = pacientes.findIndex(p => p.id == editId);
     pacientes[idx] = { ...pacientes[idx], ...data };
   } else {
-    const id = DB.get('next_paciente_id', 100);
-    pacientes.push({ id, ...data });
-    DB.set('next_paciente_id', id + 1);
+    pacientes.push({ id: newId(), ...data });
   }
   DB.set('pacientes', pacientes);
   closeModal('modal-paciente');
